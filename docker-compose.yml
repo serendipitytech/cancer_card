@@ -1,0 +1,21 @@
+services:
+  cancer-card:
+    build: .
+    container_name: cancer-card
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - cancer_card_data:/data
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/data/app.db
+      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_URL=${AUTH_URL:-http://localhost:3000}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@localhost}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+
+volumes:
+  cancer_card_data:
+    driver: local

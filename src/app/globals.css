@@ -1,26 +1,245 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ─── Design Tokens ─────────────────────────────────────────────────────────── */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Primary — Purple (Empowerment) */
+  --color-royal: #7C3AED;
+  --color-royal-dark: #6D28D9;
+  --color-royal-light: #A78BFA;
+  --color-royal-50: #F5F3FF;
+  --color-royal-100: #EDE9FE;
+  --color-royal-200: #DDD6FE;
+
+  /* Accent — Pink (Warmth) */
+  --color-blush: #EC4899;
+  --color-blush-light: #F9A8D4;
+  --color-blush-dark: #DB2777;
+  --color-blush-50: #FDF2F8;
+
+  /* Backgrounds & Surfaces */
+  --color-cloud: #F8FAFC;
+  --color-champagne: #FDF4FF;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #FFFFFF;
+
+  /* Text */
+  --color-midnight: #1E1B4B;
+  --color-ink: #334155;
+  --color-muted: #94A3B8;
+
+  /* Semantic */
+  --color-success: #10B981;
+  --color-success-light: #D1FAE5;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FEF3C7;
+  --color-danger: #EF4444;
+  --color-danger-light: #FEE2E2;
+
+  /* Suits (decorative card motif) */
+  --color-spade: #1E1B4B;
+  --color-heart: #EF4444;
+  --color-diamond: #7C3AED;
+  --color-club: #10B981;
+
+  /* Typography */
+  --font-heading: "Nunito", var(--font-nunito), system-ui, sans-serif;
+  --font-body: "Inter", var(--font-inter), system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Spacing (mobile-first) */
+  --space-safe-top: env(safe-area-inset-top);
+  --space-safe-bottom: env(safe-area-inset-bottom);
+  --space-safe-left: env(safe-area-inset-left);
+  --space-safe-right: env(safe-area-inset-right);
+  --space-tab-bar: 5rem;
+
+  /* Radius */
+  --radius-card: 1rem;
+  --radius-button: 0.75rem;
+  --radius-pill: 9999px;
+  --radius-sheet: 1.25rem;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px 0 rgba(30, 27, 75, 0.06), 0 1px 2px -1px rgba(30, 27, 75, 0.06);
+  --shadow-card-hover: 0 4px 12px -2px rgba(30, 27, 75, 0.1), 0 2px 4px -2px rgba(30, 27, 75, 0.06);
+  --shadow-raised: 0 10px 25px -5px rgba(30, 27, 75, 0.1), 0 4px 6px -4px rgba(30, 27, 75, 0.05);
+  --shadow-sheet: 0 -10px 40px -5px rgba(30, 27, 75, 0.15);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Base Styles ───────────────────────────────────────────────────────────── */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-cloud);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
+
+/* ─── Touch Target Enforcement (Apple HIG: 44px min) ────────────────────────── */
+
+button,
+a,
+[role="button"],
+input[type="checkbox"],
+input[type="radio"],
+select {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+textarea,
+select {
+  min-height: 44px;
+  font-size: 16px; /* prevents iOS zoom on focus */
+}
+
+/* ─── Custom Scrollbar ──────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-royal-200);
+  border-radius: 9999px;
+}
+
+/* ─── Safe Area Padding Utilities ───────────────────────────────────────────── */
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* ─── Animation Keyframes ───────────────────────────────────────────────────── */
+
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-40px) scale(1);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(124, 58, 237, 0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes card-deal {
+  0% {
+    opacity: 0;
+    transform: translateY(60px) rotate(-5deg) scale(0.9);
+  }
+  60% {
+    transform: translateY(-8px) rotate(1deg) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0) scale(1);
+  }
+}
+
+@keyframes bounce-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  70% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-float-up {
+  animation: float-up 1.5s ease-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, var(--color-royal-100) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.animate-card-deal {
+  animation: card-deal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ─── Card Playing Animation Stagger ────────────────────────────────────────── */
+
+.card-stagger > * {
+  opacity: 0;
+  animation: card-deal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.card-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.card-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.card-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.card-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.card-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.card-stagger > *:nth-child(6) { animation-delay: 300ms; }
+.card-stagger > *:nth-child(7) { animation-delay: 360ms; }
+.card-stagger > *:nth-child(8) { animation-delay: 420ms; }
