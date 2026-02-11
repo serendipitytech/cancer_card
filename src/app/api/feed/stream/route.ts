@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { activityFeed, users } from "@/db/schema";
-import { eq, desc, gt } from "drizzle-orm";
-import { getUserCrew } from "@/lib/session";
+import { eq, desc, gt, and } from "drizzle-orm";
+import { getUserActiveCrew } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +12,13 @@ export async function GET() {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const crew = await getUserCrew(session.user.id);
+  const crew = await getUserActiveCrew(session.user.id);
   if (!crew) {
     return new Response("No crew found", { status: 404 });
   }
 
   let lastChecked = new Date();
+  let interval: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -27,9 +28,9 @@ export async function GET() {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
-      sendEvent({ type: "connected", crewId: crew.crewId });
+      sendEvent({ type: "connected" });
 
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         try {
           const newEntries = db
             .select({
@@ -44,39 +45,38 @@ export async function GET() {
             .from(activityFeed)
             .innerJoin(users, eq(activityFeed.actorId, users.id))
             .where(
-              eq(activityFeed.crewId, crew.crewId)
+              and(
+                eq(activityFeed.crewId, crew.crewId),
+                gt(activityFeed.createdAt, lastChecked)
+              )
             )
             .orderBy(desc(activityFeed.createdAt))
             .limit(5)
             .all();
 
-          const fresh = newEntries.filter(
-            (entry) => entry.createdAt > lastChecked
-          );
-
-          if (fresh.length > 0) {
-            sendEvent({ type: "updates", entries: fresh });
+          if (newEntries.length > 0) {
+            sendEvent({ type: "updates", entries: newEntries });
             lastChecked = new Date();
           }
 
           sendEvent({ type: "heartbeat" });
         } catch {
-          clearInterval(interval);
+          if (interval) clearInterval(interval);
           controller.close();
         }
       }, 2000);
 
-      const cleanup = () => {
-        clearInterval(interval);
+      setTimeout(() => {
+        if (interval) clearInterval(interval);
         try {
           controller.close();
         } catch {
           // already closed
         }
-      };
-
-      // Note: AbortSignal handling is done by the runtime
-      setTimeout(cleanup, 5 * 60 * 1000);
+      }, 5 * 60 * 1000);
+    },
+    cancel() {
+      if (interval) clearInterval(interval);
     },
   });
 

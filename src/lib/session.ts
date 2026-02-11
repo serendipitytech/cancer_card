@@ -63,13 +63,6 @@ export async function getUserActiveCrew(
   return resolveActiveCrew(getUserCrews(userId));
 }
 
-/** @deprecated Use getUserActiveCrew() for multi-crew support */
-export async function getUserCrew(
-  userId: string
-): Promise<CrewMembership | null> {
-  return getUserActiveCrew(userId);
-}
-
 export function isCardHolder(userId: string, crewId: string): boolean {
   const member = db
     .select({ role: crewMembers.role })

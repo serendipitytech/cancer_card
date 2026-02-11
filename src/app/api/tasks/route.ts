@@ -3,9 +3,11 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { tasks, crewMembers, users, bids } from "@/db/schema";
 import { createTaskSchema } from "@/lib/validators";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { logActivity } from "@/lib/points";
-import { getUserCrew } from "@/lib/session";
+import { getUserActiveCrew } from "@/lib/session";
+
+const VALID_TASK_STATUSES = ["pending", "claimed", "in_progress", "completed", "cancelled"] as const;
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const crew = await getUserActiveCrew(session.user.id);
     if (!crew) {
       return NextResponse.json(
         { error: "You're not in a crew yet" },
@@ -90,13 +92,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const crew = await getUserActiveCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ tasks: [] });
     }
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+
+    if (status && !VALID_TASK_STATUSES.includes(status as typeof VALID_TASK_STATUSES[number])) {
+      return NextResponse.json(
+        { error: "Invalid status filter" },
+        { status: 400 }
+      );
+    }
 
     const allTasks = db
       .select()
@@ -109,48 +118,66 @@ export async function GET(request: Request) {
       .orderBy(desc(tasks.createdAt))
       .all();
 
-    const tasksWithDetails = allTasks.map((task) => {
-      const taskBids = task.requestMode === "auction"
-        ? db
-            .select({
-              id: bids.id,
-              bidAmount: bids.bidAmount,
-              comment: bids.comment,
-              createdAt: bids.createdAt,
-              userId: bids.userId,
-              userName: users.displayName,
-              userAvatar: users.avatarUrl,
-            })
-            .from(bids)
-            .innerJoin(users, eq(bids.userId, users.id))
-            .where(eq(bids.taskId, task.id))
-            .orderBy(bids.bidAmount)
-            .all()
-        : [];
+    if (allTasks.length === 0) {
+      return NextResponse.json({ tasks: [] });
+    }
 
-      const assignedUser = task.assignedTo
-        ? db
-            .select({ displayName: users.displayName, avatarUrl: users.avatarUrl })
-            .from(users)
-            .where(eq(users.id, task.assignedTo))
-            .get()
-        : null;
+    const auctionTaskIds = allTasks
+      .filter((t) => t.requestMode === "auction")
+      .map((t) => t.id);
 
-      const claimedUser = task.claimedBy
-        ? db
-            .select({ displayName: users.displayName, avatarUrl: users.avatarUrl })
-            .from(users)
-            .where(eq(users.id, task.claimedBy))
-            .get()
-        : null;
+    const allBids = auctionTaskIds.length > 0
+      ? db
+          .select({
+            id: bids.id,
+            taskId: bids.taskId,
+            bidAmount: bids.bidAmount,
+            comment: bids.comment,
+            createdAt: bids.createdAt,
+            userId: bids.userId,
+            userName: users.displayName,
+            userAvatar: users.avatarUrl,
+          })
+          .from(bids)
+          .innerJoin(users, eq(bids.userId, users.id))
+          .where(inArray(bids.taskId, auctionTaskIds))
+          .orderBy(bids.bidAmount)
+          .all()
+      : [];
 
-      return {
-        ...task,
-        bids: taskBids,
-        assignedUser,
-        claimedUser,
-      };
-    });
+    const bidsByTask = new Map<string, typeof allBids>();
+    for (const bid of allBids) {
+      const existing = bidsByTask.get(bid.taskId) ?? [];
+      bidsByTask.set(bid.taskId, [...existing, bid]);
+    }
+
+    const userIds = [
+      ...new Set(
+        allTasks
+          .flatMap((t) => [t.assignedTo, t.claimedBy])
+          .filter((id): id is string => id !== null)
+      ),
+    ];
+
+    const userMap = new Map<string, { displayName: string; avatarUrl: string | null }>();
+    if (userIds.length > 0) {
+      const referencedUsers = db
+        .select({ id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl })
+        .from(users)
+        .where(inArray(users.id, userIds))
+        .all();
+
+      for (const u of referencedUsers) {
+        userMap.set(u.id, { displayName: u.displayName, avatarUrl: u.avatarUrl });
+      }
+    }
+
+    const tasksWithDetails = allTasks.map((task) => ({
+      ...task,
+      bids: bidsByTask.get(task.id) ?? [],
+      assignedUser: task.assignedTo ? userMap.get(task.assignedTo) ?? null : null,
+      claimedUser: task.claimedBy ? userMap.get(task.claimedBy) ?? null : null,
+    }));
 
     return NextResponse.json({ tasks: tasksWithDetails });
   } catch (error) {

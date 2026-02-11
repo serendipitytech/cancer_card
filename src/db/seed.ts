@@ -69,16 +69,20 @@ const DEFAULT_TASK_TEMPLATES = [
   { title: "Dealer's choice", category: "Wildcard", defaultPoints: 30, emoji: "✨" },
 ] as const;
 
-export function seedCrewDefaults(crewId: string) {
+type DbOrTx = {
+  insert: typeof db.insert;
+};
+
+export function seedCrewDefaults(crewId: string, txOrDb: DbOrTx = db) {
   for (const template of DEFAULT_TASK_TEMPLATES) {
-    db.insert(schema.taskMenuTemplates).values({
+    txOrDb.insert(schema.taskMenuTemplates).values({
       crewId,
       ...template,
     }).run();
   }
 
   for (const routine of DEFAULT_SELF_CARE_ROUTINES) {
-    db.insert(schema.selfCareRoutines).values({
+    txOrDb.insert(schema.selfCareRoutines).values({
       crewId,
       ...routine,
     }).run();

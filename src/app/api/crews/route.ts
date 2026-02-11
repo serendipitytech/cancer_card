@@ -25,28 +25,33 @@ export async function POST(request: Request) {
       );
     }
 
+    const userId = session.user.id;
     const inviteCode = generateInviteCode();
 
-    const crew = db
-      .insert(crews)
-      .values({
-        name: parsed.data.name,
-        cardHolderId: session.user.id,
-        pointBalance: parsed.data.initialPoints,
-        inviteCode,
-      })
-      .returning()
-      .get();
+    const crew = db.transaction((tx) => {
+      const newCrew = tx
+        .insert(crews)
+        .values({
+          name: parsed.data.name,
+          cardHolderId: userId,
+          pointBalance: parsed.data.initialPoints,
+          inviteCode,
+        })
+        .returning()
+        .get();
 
-    db.insert(crewMembers)
-      .values({
-        crewId: crew.id,
-        userId: session.user.id,
-        role: "card_holder",
-      })
-      .run();
+      tx.insert(crewMembers)
+        .values({
+          crewId: newCrew.id,
+          userId,
+          role: "card_holder",
+        })
+        .run();
 
-    seedCrewDefaults(crew.id);
+      seedCrewDefaults(newCrew.id, tx);
+
+      return newCrew;
+    });
 
     await setActiveCrewCookie(crew.id);
 
@@ -92,8 +97,15 @@ export async function GET() {
 
     return NextResponse.json({
       crews: memberships.map((m) => ({
-        ...m.crew,
+        id: m.crew.id,
+        name: m.crew.name,
+        pointBalance: m.crew.pointBalance,
+        cardHolderId: m.crew.cardHolderId,
+        createdAt: m.crew.createdAt,
         role: m.role,
+        ...(m.role === "card_holder" || m.role === "admin"
+          ? { inviteCode: m.crew.inviteCode }
+          : {}),
       })),
       activeCrewId,
     });

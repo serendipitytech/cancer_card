@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { milestones, selfCareRoutines } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { milestones, selfCareRoutines, crews, activityFeed } from "@/db/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { logMilestoneSchema } from "@/lib/validators";
-import { addPoints, logActivity } from "@/lib/points";
 import { calculateMedicationStreak } from "@/lib/streaks";
-import { getUserCrew } from "@/lib/session";
+import { getUserActiveCrew } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -15,7 +15,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const userId = session.user.id;
+    const { allowed } = checkRateLimit("milestones", userId, {
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 30,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many milestones logged. Please try again later." },
+        { status: 429 }
+      );
+    }
+
+    const crew = await getUserActiveCrew(userId);
     if (!crew || crew.role !== "card_holder") {
       return NextResponse.json(
         { error: "Only the Card Holder can log milestones" },
@@ -46,51 +58,79 @@ export async function POST(request: Request) {
 
     const pointValue = routine?.pointValue ?? 10;
 
-    const milestone = db
-      .insert(milestones)
-      .values({
-        crewId: crew.crewId,
-        userId: session.user.id,
-        milestoneType: parsed.data.milestoneType,
-        pointsEarned: pointValue,
-        note: parsed.data.note || null,
-      })
-      .returning()
-      .get();
+    const result = db.transaction((tx) => {
+      const milestone = tx
+        .insert(milestones)
+        .values({
+          crewId: crew.crewId,
+          userId,
+          milestoneType: parsed.data.milestoneType,
+          pointsEarned: pointValue,
+          note: parsed.data.note || null,
+        })
+        .returning()
+        .get();
 
-    const newBalance = addPoints(crew.crewId, pointValue);
+      const updatedCrew = tx
+        .update(crews)
+        .set({
+          pointBalance: sql`${crews.pointBalance} + ${pointValue}`,
+        })
+        .where(eq(crews.id, crew.crewId))
+        .returning({ pointBalance: crews.pointBalance })
+        .get();
 
-    logActivity(crew.crewId, "milestone_logged", session.user.id, {
-      milestoneType: parsed.data.milestoneType,
-      pointsEarned: pointValue,
-      routineName: routine?.name,
+      tx.insert(activityFeed)
+        .values({
+          crewId: crew.crewId,
+          eventType: "milestone_logged",
+          actorId: userId,
+          data: {
+            milestoneType: parsed.data.milestoneType,
+            pointsEarned: pointValue,
+            routineName: routine?.name,
+          },
+        })
+        .run();
+
+      let streakBonus = 0;
+      if (parsed.data.milestoneType === "meds") {
+        const streak = calculateMedicationStreak(userId, crew.crewId);
+        if (streak.bonusPoints > 0) {
+          streakBonus = streak.bonusPoints;
+
+          tx.update(crews)
+            .set({
+              pointBalance: sql`${crews.pointBalance} + ${streak.bonusPoints}`,
+            })
+            .where(eq(crews.id, crew.crewId))
+            .run();
+
+          tx.insert(milestones)
+            .values({
+              crewId: crew.crewId,
+              userId,
+              milestoneType: "streak_bonus",
+              pointsEarned: streak.bonusPoints,
+              note: streak.bonusType,
+              isStreakBonus: true,
+            })
+            .run();
+        }
+      }
+
+      return {
+        milestone,
+        newBalance: updatedCrew.pointBalance + streakBonus,
+        streakBonus,
+      };
     });
 
-    let streakBonus = 0;
-    if (parsed.data.milestoneType === "meds") {
-      const streak = calculateMedicationStreak(session.user.id, crew.crewId);
-      if (streak.bonusPoints > 0) {
-        streakBonus = streak.bonusPoints;
-        addPoints(crew.crewId, streak.bonusPoints);
-
-        db.insert(milestones)
-          .values({
-            crewId: crew.crewId,
-            userId: session.user.id,
-            milestoneType: "streak_bonus",
-            pointsEarned: streak.bonusPoints,
-            note: streak.bonusType,
-            isStreakBonus: true,
-          })
-          .run();
-      }
-    }
-
     return NextResponse.json({
-      milestone,
+      milestone: result.milestone,
       pointsEarned: pointValue,
-      streakBonus,
-      newBalance: newBalance + streakBonus,
+      streakBonus: result.streakBonus,
+      newBalance: result.newBalance,
     });
   } catch (error) {
     console.error("Log milestone error:", error);
@@ -108,7 +148,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const crew = await getUserActiveCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ milestones: [], routines: [] });
     }

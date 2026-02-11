@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { crewMembers, users } from "@/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
-import { getUserCrew } from "@/lib/session";
+import { getUserActiveCrew } from "@/lib/session";
 
 export async function GET() {
   try {
@@ -12,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const crew = await getUserActiveCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ leaderboard: [] });
     }

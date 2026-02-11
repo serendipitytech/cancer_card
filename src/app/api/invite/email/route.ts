@@ -1,35 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getUserCrew } from "@/lib/session";
+import { getUserActiveCrew } from "@/lib/session";
 import { sendInviteEmailSchema } from "@/lib/validators";
 import { sendInviteEmail } from "@/lib/email";
-
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const RATE_LIMIT_MAX = 10;
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(userId: string, emailCount: number): boolean {
-  const now = Date.now();
-  const entry = rateLimitStore.get(userId);
-
-  if (!entry || now > entry.resetAt) {
-    rateLimitStore.set(userId, {
-      count: emailCount,
-      resetAt: now + RATE_LIMIT_WINDOW_MS,
-    });
-    return true;
-  }
-
-  if (entry.count + emailCount > RATE_LIMIT_MAX) {
-    return false;
-  }
-
-  rateLimitStore.set(userId, {
-    ...entry,
-    count: entry.count + emailCount,
-  });
-  return true;
-}
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -38,7 +12,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const crew = await getUserActiveCrew(session.user.id);
     if (!crew) {
       return NextResponse.json(
         { error: "You're not in a crew yet" },
@@ -65,7 +39,11 @@ export async function POST(request: Request) {
 
     const { emails } = parsed.data;
 
-    if (!checkRateLimit(session.user.id, emails.length)) {
+    const { allowed } = checkRateLimit("invite-email", session.user.id, {
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 10,
+    }, emails.length);
+    if (!allowed) {
       return NextResponse.json(
         { error: "Too many invites sent. Try again later." },
         { status: 429 }

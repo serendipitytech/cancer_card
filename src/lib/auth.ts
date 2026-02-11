@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -20,9 +21,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) {
+          return null;
+        }
+
+        const ip =
+          request?.headers instanceof Headers
+            ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
+            : "unknown";
+        const { allowed } = checkRateLimit("login", ip, {
+          windowMs: 15 * 60 * 1000,
+          maxRequests: 10,
+        });
+        if (!allowed) {
           return null;
         }
 

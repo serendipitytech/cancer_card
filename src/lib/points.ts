@@ -2,6 +2,8 @@ import { db } from "@/db";
 import { crews, activityFeed } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 
+export type ActivityEventType = (typeof activityFeed.eventType.enumValues)[number];
+
 export function deductPoints(crewId: string, amount: number): number {
   const crew = db
     .update(crews)
@@ -40,14 +42,14 @@ export function getPointBalance(crewId: string): number {
 
 export function logActivity(
   crewId: string,
-  eventType: string,
+  eventType: ActivityEventType,
   actorId: string,
   data: Record<string, unknown>
 ) {
   db.insert(activityFeed)
     .values({
       crewId,
-      eventType: eventType as "task_created",
+      eventType,
       actorId,
       data,
     })

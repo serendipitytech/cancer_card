@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { taskMenuTemplates } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getUserCrew } from "@/lib/session";
+import { getUserActiveCrew } from "@/lib/session";
 import { createTemplateSchema } from "@/lib/validators";
 
 export async function GET() {
@@ -13,7 +13,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const crew = await getUserActiveCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ templates: [] });
     }
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const crew = await getUserActiveCrew(session.user.id);
     if (!crew || (crew.role !== "card_holder" && crew.role !== "admin")) {
       return NextResponse.json(
         { error: "Only Card Holder or Admin can modify the menu" },

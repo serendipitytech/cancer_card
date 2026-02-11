@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { getUserCrews, resolveActiveCrew } from "@/lib/session";
 import { db } from "@/db";
 import { tasks, milestones, activityFeed, users } from "@/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte } from "drizzle-orm";
 import { DashboardClient } from "./dashboard-client";
 
 export const dynamic = "force-dynamic";
@@ -62,13 +62,11 @@ export default async function DashboardPage() {
     .where(
       and(
         eq(milestones.crewId, crew.crewId),
-        eq(milestones.userId, session.user.id)
+        eq(milestones.userId, session.user.id),
+        gte(milestones.loggedAt, todayStart)
       )
     )
-    .orderBy(desc(milestones.loggedAt))
-    .limit(20)
-    .all()
-    .filter((m) => m.loggedAt >= todayStart);
+    .all();
 
   return (
     <DashboardClient

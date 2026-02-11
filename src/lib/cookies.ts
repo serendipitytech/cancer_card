@@ -14,7 +14,7 @@ export async function setActiveCrewCookie(crewId: string): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(ACTIVE_CREW_COOKIE_NAME, crewId, {
     maxAge: ONE_YEAR_SECONDS,
-    httpOnly: false, // Required for client-side crew switching via CrewSwitcher
+    httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",

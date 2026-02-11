@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Check, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ACTIVE_CREW_COOKIE_NAME } from "@/lib/cookie-constants";
 
 type Crew = {
   id: string;
@@ -55,11 +54,20 @@ export function CrewSwitcher({ crews, activeCrewId }: CrewSwitcherProps) {
     };
   }, [open]);
 
-  function handleSwitch(crewId: string) {
-    const secure = window.location.protocol === "https:" ? ";secure" : "";
-    document.cookie = `${ACTIVE_CREW_COOKIE_NAME}=${crewId};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax${secure}`;
+  async function handleSwitch(crewId: string) {
     setOpen(false);
-    router.refresh();
+    try {
+      const res = await fetch("/api/crews/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ crewId }),
+      });
+      if (res.ok) {
+        router.refresh();
+      }
+    } catch {
+      // Silently fail — user can retry
+    }
   }
 
   return (

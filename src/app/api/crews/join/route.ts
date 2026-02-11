@@ -70,7 +70,10 @@ export async function POST(request: Request) {
     await setActiveCrewCookie(crew.id);
 
     return NextResponse.json(
-      { crew, message: `Welcome to ${crew.name}!` },
+      {
+        crew: { id: crew.id, name: crew.name, pointBalance: crew.pointBalance },
+        message: `Welcome to ${crew.name}!`,
+      },
       { status: 201 }
     );
   } catch (error) {

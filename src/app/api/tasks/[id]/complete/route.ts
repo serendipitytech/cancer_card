@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { tasks, crewMembers, crews } from "@/db/schema";
+import { tasks, crewMembers, crews, activityFeed } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { deductPoints, logActivity } from "@/lib/points";
 
 export async function POST(
   request: Request,
@@ -15,6 +14,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const { id: taskId } = await params;
 
     const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get();
@@ -36,7 +36,7 @@ export async function POST(
       .where(
         and(
           eq(crewMembers.crewId, task.crewId),
-          eq(crewMembers.userId, session.user.id)
+          eq(crewMembers.userId, userId)
         )
       )
       .get();
@@ -56,47 +56,66 @@ export async function POST(
     }
 
     const finalCost = task.finalPointCost || task.pointCost;
-    const newBalance = deductPoints(task.crewId, finalCost);
 
-    const updated = db
-      .update(tasks)
-      .set({
-        status: "completed",
-        finalPointCost: finalCost,
-        completedAt: new Date(),
-      })
-      .where(eq(tasks.id, taskId))
-      .returning()
-      .get();
-
-    if (task.claimedBy) {
-      db.update(crewMembers)
+    const result = db.transaction((tx) => {
+      const updatedCrew = tx
+        .update(crews)
         .set({
-          stats: sql`json_set(
-            COALESCE(${crewMembers.stats}, '{}'),
-            '$.tasksCompleted', COALESCE(json_extract(${crewMembers.stats}, '$.tasksCompleted'), 0) + 1,
-            '$.pointsSpent', COALESCE(json_extract(${crewMembers.stats}, '$.pointsSpent'), 0) + ${finalCost}
-          )`,
+          pointBalance: sql`${crews.pointBalance} - ${finalCost}`,
         })
-        .where(
-          and(
-            eq(crewMembers.crewId, task.crewId),
-            eq(crewMembers.userId, task.claimedBy)
-          )
-        )
-        .run();
-    }
+        .where(eq(crews.id, task.crewId))
+        .returning({ pointBalance: crews.pointBalance })
+        .get();
 
-    logActivity(task.crewId, "task_completed", session.user.id, {
-      taskId: task.id,
-      taskTitle: task.title,
-      pointCost: finalCost,
-      completedBy: task.claimedBy,
+      const updated = tx
+        .update(tasks)
+        .set({
+          status: "completed",
+          finalPointCost: finalCost,
+          completedAt: new Date(),
+        })
+        .where(eq(tasks.id, taskId))
+        .returning()
+        .get();
+
+      if (task.claimedBy) {
+        tx.update(crewMembers)
+          .set({
+            stats: sql`json_set(
+              COALESCE(${crewMembers.stats}, '{}'),
+              '$.tasksCompleted', COALESCE(json_extract(${crewMembers.stats}, '$.tasksCompleted'), 0) + 1,
+              '$.pointsSpent', COALESCE(json_extract(${crewMembers.stats}, '$.pointsSpent'), 0) + ${finalCost}
+            )`,
+          })
+          .where(
+            and(
+              eq(crewMembers.crewId, task.crewId),
+              eq(crewMembers.userId, task.claimedBy)
+            )
+          )
+          .run();
+      }
+
+      tx.insert(activityFeed)
+        .values({
+          crewId: task.crewId,
+          eventType: "task_completed",
+          actorId: userId,
+          data: {
+            taskId: task.id,
+            taskTitle: task.title,
+            pointCost: finalCost,
+            completedBy: task.claimedBy,
+          },
+        })
+        .run();
+
+      return { updated, newBalance: updatedCrew.pointBalance };
     });
 
     return NextResponse.json({
-      ...updated,
-      newBalance,
+      ...result.updated,
+      newBalance: result.newBalance,
     });
   } catch (error) {
     console.error("Complete task error:", error);

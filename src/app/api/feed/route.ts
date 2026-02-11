@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { activityFeed, users } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { getUserCrew } from "@/lib/session";
+import { getUserActiveCrew } from "@/lib/session";
 
 export async function GET(request: Request) {
   try {
@@ -12,14 +12,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = await getUserCrew(session.user.id);
+    const crew = await getUserActiveCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ feed: [] });
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "30");
-    const offset = parseInt(searchParams.get("offset") || "0");
+    const rawLimit = parseInt(searchParams.get("limit") || "30");
+    const rawOffset = parseInt(searchParams.get("offset") || "0");
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 30, 1), 100);
+    const offset = Math.max(Number.isFinite(rawOffset) ? rawOffset : 0, 0);
 
     const feedEntries = db
       .select({
