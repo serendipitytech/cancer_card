@@ -31,24 +31,24 @@
 
 ---
 
-## Phase 1: Test, Fix, Launch (NEXT)
+## Phase 1: Test, Fix, Launch (DONE)
 
 > First local run, fix bugs, get it deployable.
 
 | # | Feature | Status | Priority | Notes |
 |---|---------|--------|----------|-------|
-| 1.1 | Run dev server + fix runtime errors | next | P0 | First real test |
-| 1.2 | Run database migrations + seed | next | P0 | `db:push` then `db:seed` |
-| 1.3 | Test full signup -> create crew -> play card flow | next | P0 | End-to-end manual test |
-| 1.4 | Test crew join flow (invite code) | next | P0 | |
-| 1.5 | Test auction bidding with SSE | next | P0 | |
-| 1.6 | Test self-care logging + streak bonuses | next | P0 | |
-| 1.7 | Generate AUTH_SECRET for production | next | P0 | `openssl rand -base64 32` |
-| 1.8 | Set up Resend API key + verified domain | next | P1 | Email notifications |
-| 1.9 | Docker build + test locally | next | P1 | `docker compose up -d --build` |
-| 1.10 | Generate PWA icons (192x192, 512x512) | next | P1 | Playing card spade icon |
-| 1.11 | Deploy to VPS | next | P1 | |
-| 1.12 | Set up reverse proxy (Traefik/Nginx) | next | P1 | HTTPS + domain routing |
+| 1.1 | Run dev server + fix runtime errors | done | P0 | |
+| 1.2 | Run database migrations + seed | done | P0 | docker-entrypoint.sh auto-applies |
+| 1.3 | Test full signup -> create crew -> play card flow | done | P0 | Tested on production |
+| 1.4 | Test crew join flow (invite code) | done | P0 | |
+| 1.5 | Test auction bidding with SSE | done | P0 | |
+| 1.6 | Test self-care logging + streak bonuses | done | P0 | |
+| 1.7 | Generate AUTH_SECRET for production | done | P0 | |
+| 1.8 | Set up Resend API key + verified domain | next | P1 | API key set, domain verification TBD |
+| 1.9 | Docker build + test locally | done | P1 | |
+| 1.10 | Generate PWA icons (192x192, 512x512) | next | P1 | Home screen app icon |
+| 1.11 | Deploy to VPS | done | P1 | cancer-card.serendipitylabs.cloud |
+| 1.12 | Set up reverse proxy (Traefik/Nginx) | done | P1 | Traefik + Let's Encrypt |
 | 1.13 | SQLite backup strategy | next | P2 | Cron job copying db file |
 
 ---
@@ -158,7 +158,7 @@
 
 | # | Feature | Status | Priority | Notes |
 |---|---------|--------|----------|-------|
-| 8.1 | Onboarding tour/walkthrough | future | P2 | First-run guided experience |
+| 8.1 | Onboarding tour/walkthrough | done | P2 | Dashboard spotlight tour + Quick Start Guide |
 | 8.2 | "Cancer Card" shareable image generator | future | P3 | Social media sharing |
 | 8.3 | Anonymous crew member option | future | P3 | Community/church helpers |
 | 8.4 | Caregiver resources & tips | future | P3 | Curated content |
@@ -191,7 +191,7 @@
 | I.2 | Health check monitoring | planned | P2 | Uptime alerts |
 | I.3 | Error logging (Sentry or similar) | planned | P2 | |
 | I.4 | Rate limiting on API endpoints | planned | P1 | Prevent abuse |
-| I.5 | HTTPS via reverse proxy | planned | P0 | Required for PWA |
+| I.5 | HTTPS via reverse proxy | done | P0 | Traefik + Let's Encrypt |
 | I.6 | CI/CD pipeline | future | P3 | GitHub Actions → Docker build → deploy |
 
 ---
@@ -209,3 +209,6 @@
 | 2025-02-10 | Resend for email | User preference, good DX, generous free tier |
 | 2025-02-10 | Drizzle over Prisma | Better SQLite support, lighter, no codegen step |
 | 2025-02-10 | Port 3000 | No conflicts with existing local services |
+| 2026-02-10 | docker-compose.yml gitignored | Server-specific Traefik config; example file committed as template |
+| 2026-02-10 | Auto-migration via entrypoint | docker-entrypoint.sh applies Drizzle SQL on fresh databases |
+| 2026-02-10 | trustHost + secureCookie | Required for Auth.js behind HTTPS reverse proxy |
