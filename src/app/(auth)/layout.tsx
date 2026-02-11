@@ -21,7 +21,7 @@ export default function AuthLayout({
         <SuitIcon suit="club" size="xl" />
       </div>
 
-      <div className="w-full max-w-sm">{children}</div>
+      <div className="w-full">{children}</div>
     </div>
   );
 }

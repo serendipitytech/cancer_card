@@ -45,7 +45,7 @@ export function LoginForm() {
   }
 
   return (
-    <div className="animate-card-deal">
+    <div className="animate-card-deal max-w-sm mx-auto">
       {/* Logo */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-royal to-blush mb-4">
@@ -98,9 +98,20 @@ export function LoginForm() {
         </form>
       </div>
 
-      {/* Sign up link */}
+      {/* Quick start guide link */}
       <p className="text-center text-sm text-muted mt-6">
         New here?{" "}
+        <Link
+          href="/quickstart"
+          className="text-royal font-semibold hover:underline min-h-0 min-w-0"
+        >
+          Read the Quick Start Guide
+        </Link>
+      </p>
+
+      {/* Sign up link */}
+      <p className="text-center text-sm text-muted mt-2">
+        Don&apos;t have an account?{" "}
         <Link
           href="/signup"
           className="text-royal font-semibold hover:underline min-h-0 min-w-0"
