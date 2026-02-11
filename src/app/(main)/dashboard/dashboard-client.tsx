@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   Zap,
@@ -9,6 +10,7 @@ import {
   Share2,
   Copy,
   ChevronRight,
+  LogOut,
 } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +19,8 @@ import { PointDisplay } from "@/components/cards/point-display";
 import { SuitIcon } from "@/components/cards/suit-icon";
 import { useToast } from "@/components/ui/toast";
 import { useHaptics } from "@/hooks/use-haptics";
+import { useTour } from "@/hooks/use-tour";
+import { TourOverlay } from "@/components/tour/tour-overlay";
 import { timeAgo, getUrgencyLabel } from "@/lib/utils";
 
 type DashboardProps = {
@@ -41,6 +45,7 @@ type DashboardProps = {
     actorName: string;
   }>;
   todayMilestoneCount: number;
+  hasSeenTour: boolean;
 };
 
 export function DashboardClient({
@@ -52,9 +57,11 @@ export function DashboardClient({
   recentTasks,
   recentFeed,
   todayMilestoneCount,
+  hasSeenTour,
 }: DashboardProps) {
   const { addToast } = useToast();
   const { vibrate } = useHaptics();
+  const tour = useTour(hasSeenTour);
 
   const isCardHolder = role === "card_holder" || role === "admin";
 
@@ -88,6 +95,7 @@ export function DashboardClient({
       {/* Point Balance Card */}
       {isCardHolder && (
         <motion.div
+          data-tour="point-bank"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.1 }}
@@ -108,6 +116,7 @@ export function DashboardClient({
 
       {/* Quick Actions */}
       <motion.div
+        data-tour="quick-actions"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
@@ -189,6 +198,7 @@ export function DashboardClient({
 
       {/* Invite Card */}
       <motion.div
+        data-tour="invite-code"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
@@ -209,6 +219,7 @@ export function DashboardClient({
       {/* Recent Tasks */}
       {recentTasks.length > 0 && (
         <motion.div
+          data-tour="recent-tasks"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
@@ -257,6 +268,7 @@ export function DashboardClient({
       {/* Activity Feed Preview */}
       {recentFeed.length > 0 && (
         <motion.div
+          data-tour="activity-feed"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
@@ -291,8 +303,34 @@ export function DashboardClient({
         </motion.div>
       )}
 
+      {/* Sign Out */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
+        className="flex justify-center pt-2"
+      >
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="flex items-center gap-2 text-sm text-muted hover:text-danger transition-colors py-2 px-4 rounded-lg min-h-[44px]"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </button>
+      </motion.div>
+
       {/* Spacer for tab bar */}
       <div className="h-4" />
+
+      <TourOverlay
+        isActive={tour.isActive}
+        currentStep={tour.currentStep}
+        currentStepIndex={tour.currentStepIndex}
+        totalSteps={tour.totalSteps}
+        targetRect={tour.targetRect}
+        onNext={tour.next}
+        onSkip={tour.skip}
+      />
     </div>
   );
 }

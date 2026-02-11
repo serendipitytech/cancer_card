@@ -18,6 +18,12 @@ export default async function DashboardPage() {
     redirect("/onboarding");
   }
 
+  const user = db
+    .select({ hasSeenTour: users.hasSeenTour })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .get();
+
   const recentTasks = db
     .select()
     .from(tasks)
@@ -68,6 +74,7 @@ export default async function DashboardPage() {
       recentTasks={recentTasks}
       recentFeed={recentFeed}
       todayMilestoneCount={todayMilestones.length}
+      hasSeenTour={user?.hasSeenTour ?? false}
     />
   );
 }
