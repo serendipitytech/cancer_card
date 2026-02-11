@@ -2,6 +2,16 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { crewMembers, crews } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { getActiveCrewCookie } from "@/lib/cookies";
+
+type CrewMembership = {
+  crewId: string;
+  role: string;
+  crewName: string;
+  pointBalance: number;
+  inviteCode: string;
+  cardHolderId: string;
+};
 
 export async function getSession() {
   const session = await auth();
@@ -17,8 +27,8 @@ export async function requireSession() {
   return session;
 }
 
-export function getUserCrew(userId: string) {
-  const membership = db
+export function getUserCrews(userId: string): CrewMembership[] {
+  return db
     .select({
       crewId: crewMembers.crewId,
       role: crewMembers.role,
@@ -30,9 +40,34 @@ export function getUserCrew(userId: string) {
     .from(crewMembers)
     .innerJoin(crews, eq(crewMembers.crewId, crews.id))
     .where(eq(crewMembers.userId, userId))
-    .get();
+    .all();
+}
 
-  return membership || null;
+export async function resolveActiveCrew(
+  allCrews: CrewMembership[]
+): Promise<CrewMembership | null> {
+  if (allCrews.length === 0) return null;
+
+  const cookieCrewId = await getActiveCrewCookie();
+  if (cookieCrewId) {
+    const match = allCrews.find((c) => c.crewId === cookieCrewId);
+    if (match) return match;
+  }
+
+  return allCrews[0];
+}
+
+export async function getUserActiveCrew(
+  userId: string
+): Promise<CrewMembership | null> {
+  return resolveActiveCrew(getUserCrews(userId));
+}
+
+/** @deprecated Use getUserActiveCrew() for multi-crew support */
+export async function getUserCrew(
+  userId: string
+): Promise<CrewMembership | null> {
+  return getUserActiveCrew(userId);
 }
 
 export function isCardHolder(userId: string, crewId: string): boolean {

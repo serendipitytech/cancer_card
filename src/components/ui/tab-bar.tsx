@@ -53,13 +53,43 @@ const CARD_HOLDER_TABS: TabItem[] = [
   },
 ];
 
-export function TabBar() {
+const CREW_MEMBER_TABS: TabItem[] = [
+  {
+    href: "/dashboard",
+    label: "Home",
+    icon: <Home className="w-6 h-6" strokeWidth={1.5} />,
+    activeIcon: <Home className="w-6 h-6" strokeWidth={2.5} />,
+  },
+  {
+    href: "/tasks",
+    label: "Tasks",
+    icon: <ClipboardList className="w-6 h-6" strokeWidth={1.5} />,
+    activeIcon: <ClipboardList className="w-6 h-6" strokeWidth={2.5} />,
+  },
+  {
+    href: "/leaderboard",
+    label: "Crew",
+    icon: <Trophy className="w-6 h-6" strokeWidth={1.5} />,
+    activeIcon: <Trophy className="w-6 h-6" strokeWidth={2.5} />,
+  },
+];
+
+type TabBarProps = {
+  role?: string;
+};
+
+export function TabBar({ role = "crew_member" }: TabBarProps) {
   const pathname = usePathname();
+
+  const tabs =
+    role === "card_holder" || role === "admin"
+      ? CARD_HOLDER_TABS
+      : CREW_MEMBER_TABS;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-lg border-t border-royal-100 safe-bottom">
       <div className="flex items-end justify-around px-2 pt-1 pb-1 max-w-lg mx-auto">
-        {CARD_HOLDER_TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = pathname.startsWith(tab.href);
 
           if (tab.isPlayCard) {

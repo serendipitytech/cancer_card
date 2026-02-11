@@ -3,8 +3,9 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { crews, crewMembers } from "@/db/schema";
 import { joinCrewSchema } from "@/lib/validators";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { logActivity } from "@/lib/points";
+import { setActiveCrewCookie } from "@/lib/cookies";
 
 export async function POST(request: Request) {
   try {
@@ -23,19 +24,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const existingMembership = db
-      .select({ id: crewMembers.id })
-      .from(crewMembers)
-      .where(eq(crewMembers.userId, session.user.id))
-      .get();
-
-    if (existingMembership) {
-      return NextResponse.json(
-        { error: "You're already in a crew. One crew at a time for now!" },
-        { status: 409 }
-      );
-    }
-
     const crew = db
       .select()
       .from(crews)
@@ -46,6 +34,24 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Invalid invite code. Double-check and try again!" },
         { status: 404 }
+      );
+    }
+
+    const alreadyInThisCrew = db
+      .select({ id: crewMembers.id })
+      .from(crewMembers)
+      .where(
+        and(
+          eq(crewMembers.crewId, crew.id),
+          eq(crewMembers.userId, session.user.id)
+        )
+      )
+      .get();
+
+    if (alreadyInThisCrew) {
+      return NextResponse.json(
+        { error: "You're already a member of this crew!" },
+        { status: 409 }
       );
     }
 
@@ -60,6 +66,8 @@ export async function POST(request: Request) {
     logActivity(crew.id, "member_joined", session.user.id, {
       crewName: crew.name,
     });
+
+    await setActiveCrewCookie(crew.id);
 
     return NextResponse.json(
       { crew, message: `Welcome to ${crew.name}!` },

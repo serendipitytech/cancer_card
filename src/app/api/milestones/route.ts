@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = getUserCrew(session.user.id);
+    const crew = await getUserCrew(session.user.id);
     if (!crew || crew.role !== "card_holder") {
       return NextResponse.json(
         { error: "Only the Card Holder can log milestones" },
@@ -108,7 +108,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = getUserCrew(session.user.id);
+    const crew = await getUserCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ milestones: [], routines: [] });
     }

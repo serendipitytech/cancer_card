@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getUserCrew } from "@/lib/session";
+import { getUserCrews, resolveActiveCrew } from "@/lib/session";
 import { db } from "@/db";
 import { tasks, milestones, activityFeed, users } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
@@ -12,7 +12,13 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const crew = getUserCrew(session.user.id);
+  const allCrews = getUserCrews(session.user.id);
+
+  if (allCrews.length === 0) {
+    redirect("/onboarding");
+  }
+
+  const crew = await resolveActiveCrew(allCrews);
 
   if (!crew) {
     redirect("/onboarding");
@@ -75,6 +81,12 @@ export default async function DashboardPage() {
       recentFeed={recentFeed}
       todayMilestoneCount={todayMilestones.length}
       hasSeenTour={user?.hasSeenTour ?? false}
+      allCrews={allCrews.map((c) => ({
+        id: c.crewId,
+        name: c.crewName,
+        role: c.role,
+      }))}
+      activeCrewId={crew.crewId}
     />
   );
 }

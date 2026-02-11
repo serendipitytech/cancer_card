@@ -30,6 +30,31 @@ export async function POST(
       );
     }
 
+    const membership = db
+      .select({ role: crewMembers.role })
+      .from(crewMembers)
+      .where(
+        and(
+          eq(crewMembers.crewId, task.crewId),
+          eq(crewMembers.userId, session.user.id)
+        )
+      )
+      .get();
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: "You're not a member of this crew" },
+        { status: 403 }
+      );
+    }
+
+    if (membership.role !== "card_holder" && membership.role !== "admin") {
+      return NextResponse.json(
+        { error: "Only the Card Holder can mark tasks as completed" },
+        { status: 403 }
+      );
+    }
+
     const finalCost = task.finalPointCost || task.pointCost;
     const newBalance = deductPoints(task.crewId, finalCost);
 

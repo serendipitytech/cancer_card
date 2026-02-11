@@ -6,6 +6,7 @@ import { createCrewSchema } from "@/lib/validators";
 import { generateInviteCode } from "@/lib/utils";
 import { seedCrewDefaults } from "@/db/seed";
 import { eq } from "drizzle-orm";
+import { setActiveCrewCookie, getActiveCrewCookie } from "@/lib/cookies";
 
 export async function POST(request: Request) {
   try {
@@ -21,19 +22,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: parsed.error.issues[0].message },
         { status: 400 }
-      );
-    }
-
-    const existingCrew = db
-      .select({ id: crewMembers.id })
-      .from(crewMembers)
-      .where(eq(crewMembers.userId, session.user.id))
-      .get();
-
-    if (existingCrew) {
-      return NextResponse.json(
-        { error: "You're already part of a crew. One crew at a time for now!" },
-        { status: 409 }
       );
     }
 
@@ -60,6 +48,8 @@ export async function POST(request: Request) {
 
     seedCrewDefaults(crew.id);
 
+    await setActiveCrewCookie(crew.id);
+
     return NextResponse.json(crew, { status: 201 });
   } catch (error) {
     console.error("Create crew error:", error);
@@ -77,7 +67,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const membership = db
+    const memberships = db
       .select({
         crewId: crewMembers.crewId,
         role: crewMembers.role,
@@ -86,17 +76,31 @@ export async function GET() {
       .from(crewMembers)
       .innerJoin(crews, eq(crewMembers.crewId, crews.id))
       .where(eq(crewMembers.userId, session.user.id))
-      .get();
+      .all();
 
-    if (!membership) {
-      return NextResponse.json({ crew: null });
+    if (memberships.length === 0) {
+      return NextResponse.json({ crews: [], activeCrewId: null });
     }
 
-    return NextResponse.json({ crew: membership.crew, role: membership.role });
+    const cookieCrewId = await getActiveCrewCookie();
+    const validCookieMatch = memberships.find(
+      (m) => m.crewId === cookieCrewId
+    );
+    const activeCrewId = validCookieMatch
+      ? validCookieMatch.crewId
+      : memberships[0].crewId;
+
+    return NextResponse.json({
+      crews: memberships.map((m) => ({
+        ...m.crew,
+        role: m.role,
+      })),
+      activeCrewId,
+    });
   } catch (error) {
     console.error("Get crew error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch crew" },
+      { error: "Failed to fetch crews" },
       { status: 500 }
     );
   }

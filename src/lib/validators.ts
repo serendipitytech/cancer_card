@@ -84,3 +84,12 @@ export const createRoutineSchema = z.object({
   pointValue: z.number().int().min(1).max(500),
   emoji: z.string().min(1).max(4),
 });
+
+// ─── Invite ─────────────────────────────────────────────────────────────────
+
+export const sendInviteEmailSchema = z.object({
+  emails: z
+    .array(z.string().email("Please enter a valid email address"))
+    .min(1, "At least one email is required")
+    .max(5, "You can send to at most 5 people at once"),
+});

@@ -12,7 +12,7 @@ export async function GET() {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const crew = getUserCrew(session.user.id);
+  const crew = await getUserCrew(session.user.id);
   if (!crew) {
     return new Response("No crew found", { status: 404 });
   }

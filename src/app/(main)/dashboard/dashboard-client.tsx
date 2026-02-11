@@ -7,18 +7,15 @@ import {
   Zap,
   Heart,
   ClipboardList,
-  Share2,
-  Copy,
   ChevronRight,
   LogOut,
 } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { PointDisplay } from "@/components/cards/point-display";
 import { SuitIcon } from "@/components/cards/suit-icon";
-import { useToast } from "@/components/ui/toast";
-import { useHaptics } from "@/hooks/use-haptics";
+import { InviteShareActions } from "@/components/invite/invite-share-actions";
+import { CrewSwitcher } from "@/components/ui/crew-switcher";
 import { useTour } from "@/hooks/use-tour";
 import { TourOverlay } from "@/components/tour/tour-overlay";
 import { timeAgo, getUrgencyLabel } from "@/lib/utils";
@@ -46,6 +43,8 @@ type DashboardProps = {
   }>;
   todayMilestoneCount: number;
   hasSeenTour: boolean;
+  allCrews: Array<{ id: string; name: string; role: string }>;
+  activeCrewId: string;
 };
 
 export function DashboardClient({
@@ -58,22 +57,12 @@ export function DashboardClient({
   recentFeed,
   todayMilestoneCount,
   hasSeenTour,
+  allCrews,
+  activeCrewId,
 }: DashboardProps) {
-  const { addToast } = useToast();
-  const { vibrate } = useHaptics();
   const tour = useTour(hasSeenTour);
 
   const isCardHolder = role === "card_holder" || role === "admin";
-
-  async function copyInviteCode() {
-    try {
-      await navigator.clipboard.writeText(inviteCode);
-      vibrate("success");
-      addToast("success", `Invite code ${inviteCode} copied!`);
-    } catch {
-      addToast("error", "Couldn't copy code. It's: " + inviteCode);
-    }
-  }
 
   return (
     <div className="px-4 pt-6 space-y-5 max-w-lg mx-auto">
@@ -84,7 +73,7 @@ export function DashboardClient({
         className="flex items-start justify-between"
       >
         <div>
-          <p className="text-muted text-sm font-medium">{crewName}</p>
+          <CrewSwitcher crews={allCrews} activeCrewId={activeCrewId} />
           <h1 className="font-heading font-extrabold text-2xl text-midnight">
             Hey, {userName.split(" ")[0]}
             <SuitIcon suit="heart" size="sm" className="ml-1.5 inline-block" />
@@ -210,9 +199,11 @@ export function DashboardClient({
               {inviteCode}
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={copyInviteCode}>
-            <Copy className="w-4 h-4" />
-          </Button>
+          <InviteShareActions
+            inviteCode={inviteCode}
+            crewName={crewName}
+            variant="compact"
+          />
         </Card>
       </motion.div>
 

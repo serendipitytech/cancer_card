@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = getUserCrew(session.user.id);
+    const crew = await getUserCrew(session.user.id);
     if (!crew) {
       return NextResponse.json(
         { error: "You're not in a crew yet" },
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = getUserCrew(session.user.id);
+    const crew = await getUserCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ tasks: [] });
     }

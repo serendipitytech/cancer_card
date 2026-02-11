@@ -12,7 +12,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const crew = getUserCrew(session.user.id);
+    const crew = await getUserCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ leaderboard: [] });
     }

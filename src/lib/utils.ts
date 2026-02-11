@@ -6,11 +6,9 @@ export function cn(...inputs: ClassValue[]) {
 
 export function generateInviteCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars.charAt(b % chars.length)).join("");
 }
 
 export function formatPoints(points: number): string {
