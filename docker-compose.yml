@@ -3,19 +3,45 @@ services:
     build: .
     container_name: cancer-card
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.cancer-card.rule=Host(`${SUBDOMAIN}.${DOMAIN}`)
+      - traefik.http.routers.cancer-card.tls=true
+      - traefik.http.routers.cancer-card.entrypoints=web,websecure
+      - traefik.http.routers.cancer-card.tls.certresolver=mytlschallenge
+      - traefik.http.services.cancer-card.loadbalancer.server.port=3000
+      - traefik.http.middlewares.cancer-card.headers.SSLRedirect=true
+      - traefik.http.middlewares.cancer-card.headers.STSSeconds=315360000
+      - traefik.http.middlewares.cancer-card.headers.browserXSSFilter=true
+      - traefik.http.middlewares.cancer-card.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.cancer-card.headers.forceSTSHeader=true
+      - traefik.http.middlewares.cancer-card.headers.SSLHost=${DOMAIN}
+      - traefik.http.middlewares.cancer-card.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.cancer-card.headers.STSPreload=true
+      - traefik.http.routers.cancer-card.middlewares=cancer-card@docker
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://0.0.0.0:3000/"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     volumes:
       - cancer_card_data:/data
     environment:
       - NODE_ENV=production
       - DATABASE_PATH=/data/app.db
       - AUTH_SECRET=${AUTH_SECRET}
-      - AUTH_URL=${AUTH_URL:-http://localhost:3000}
+      - AUTH_URL=${AUTH_URL}
       - RESEND_API_KEY=${RESEND_API_KEY}
-      - EMAIL_FROM=${EMAIL_FROM:-noreply@localhost}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+    networks:
+      - web
 
 volumes:
   cancer_card_data:
     driver: local
+
+networks:
+  web:
+    external: true
