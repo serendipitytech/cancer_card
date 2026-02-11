@@ -43,6 +43,10 @@ yarn-error.log*
 *.docx
 init_fullstack_project.sh
 
+# docker compose (server-specific)
+docker-compose.yml
+docker-compose.override.yml
+
 # vercel
 .vercel
 
