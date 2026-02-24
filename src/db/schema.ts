@@ -228,6 +228,170 @@ export const taskMenuTemplates = sqliteTable("task_menu_templates", {
 
 // ─── Self-Care Routine Definitions ───────────────────────────────────────────
 
+// ─── Notification Preferences ────────────────────────────────────────────────
+
+export type ChannelToggles = {
+  push: boolean;
+  email: boolean;
+  sms: boolean;
+};
+
+export type EventPreferences = {
+  task_created: ChannelToggles;
+  task_assigned: ChannelToggles;
+  task_claimed: ChannelToggles;
+  task_completed: ChannelToggles;
+  task_cancelled: ChannelToggles;
+  member_joined: ChannelToggles;
+  milestone_logged: ChannelToggles;
+  streak_bonus: ChannelToggles;
+};
+
+const defaultEventPreferences: EventPreferences = {
+  task_created: { push: true, email: true, sms: false },
+  task_assigned: { push: true, email: true, sms: true },
+  task_claimed: { push: true, email: true, sms: false },
+  task_completed: { push: true, email: true, sms: false },
+  task_cancelled: { push: true, email: false, sms: false },
+  member_joined: { push: true, email: false, sms: false },
+  milestone_logged: { push: false, email: false, sms: false },
+  streak_bonus: { push: true, email: true, sms: false },
+};
+
+export const notificationPreferences = sqliteTable(
+  "notification_preferences",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    crewId: text("crew_id")
+      .notNull()
+      .references(() => crews.id, { onDelete: "cascade" }),
+
+    // Global channel toggles (per crew)
+    enablePush: integer("enable_push", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    enableEmail: integer("enable_email", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    enableSms: integer("enable_sms", { mode: "boolean" })
+      .notNull()
+      .default(false),
+
+    // SMS contact (if SMS enabled)
+    smsPhoneNumber: text("sms_phone_number"), // E.164 format: +12345678900
+
+    // Per-event preferences (JSON)
+    eventPreferences: text("event_preferences", { mode: "json" })
+      .$type<EventPreferences>()
+      .default(defaultEventPreferences),
+
+    // Quiet hours (local timezone)
+    quietHoursEnabled: integer("quiet_hours_enabled", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    quietHoursStart: text("quiet_hours_start").default("22:00"),
+    quietHoursEnd: text("quiet_hours_end").default("08:00"),
+    timezone: text("timezone").default("America/New_York"),
+
+    // Digest preferences
+    enableWeeklyDigest: integer("enable_weekly_digest", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    digestDay: text("digest_day").default("sunday"),
+    digestTime: text("digest_time").default("09:00"),
+
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("user_crew_prefs_unique").on(table.userId, table.crewId),
+  ]
+);
+
+// ─── Notification Log ────────────────────────────────────────────────────────
+
+export const notificationLog = sqliteTable("notification_log", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  crewId: text("crew_id")
+    .notNull()
+    .references(() => crews.id, { onDelete: "cascade" }),
+
+  // Notification metadata
+  eventType: text("event_type").notNull(),
+  channel: text("channel", { enum: ["push", "email", "sms"] }).notNull(),
+
+  // Delivery details
+  recipientEmail: text("recipient_email"),
+  recipientPhone: text("recipient_phone"),
+  recipientPushToken: text("recipient_push_token"),
+
+  // Content
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  data: text("data", { mode: "json" }).$type<Record<string, unknown>>(),
+
+  // Status tracking
+  status: text("status", {
+    enum: ["pending", "sent", "failed", "skipped"],
+  }).notNull(),
+  errorMessage: text("error_message"),
+
+  // External IDs (for tracking)
+  externalId: text("external_id"),
+
+  // Timestamps
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  sentAt: integer("sent_at", { mode: "timestamp" }),
+});
+
+// ─── Push Tokens ─────────────────────────────────────────────────────────────
+
+export const pushTokens = sqliteTable("push_tokens", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  // Token details
+  token: text("token").notNull().unique(),
+  platform: text("platform", { enum: ["ios", "android", "web"] }).notNull(),
+
+  // Device info (optional, for debugging)
+  deviceModel: text("device_model"),
+  deviceName: text("device_name"),
+  appVersion: text("app_version"),
+
+  // Status
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  lastUsed: integer("last_used", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+// ─── Self-Care Routine Definitions ───────────────────────────────────────────
+
 export const selfCareRoutines = sqliteTable("self_care_routines", {
   id: text("id")
     .primaryKey()
