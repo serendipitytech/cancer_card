@@ -63,6 +63,40 @@ export async function POST(
 
     const settings = task.auctionSettings as AuctionSettings;
     if (settings?.endsAt && new Date(settings.endsAt) < new Date()) {
+      // Auction has expired - auto-close it by awarding to lowest bidder
+      const lowestBid = db
+        .select()
+        .from(bids)
+        .where(eq(bids.taskId, taskId))
+        .orderBy(bids.bidAmount)
+        .limit(1)
+        .get();
+
+      if (lowestBid) {
+        db.update(tasks)
+          .set({
+            status: "claimed",
+            claimedBy: lowestBid.userId,
+            finalPointCost: lowestBid.bidAmount,
+          })
+          .where(eq(tasks.id, taskId))
+          .run();
+
+        logActivity(task.crewId, "auction_won", lowestBid.userId, {
+          taskId: task.id,
+          taskTitle: task.title,
+          winningBid: lowestBid.bidAmount,
+        });
+
+        notifyOnEvent(task.crewId, "auction_won", lowestBid.userId, {
+          taskId: task.id,
+          taskTitle: task.title,
+          winningBid: lowestBid.bidAmount,
+          winnerId: lowestBid.userId,
+          actorName: "System",
+        });
+      }
+
       return NextResponse.json(
         { error: "This auction has ended" },
         { status: 409 }

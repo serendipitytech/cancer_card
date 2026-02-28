@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Gavel, CheckCircle, UserCheck, Clock } from "lucide-react";
+import { ArrowLeft, Gavel, CheckCircle, UserCheck, Clock, Award } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,21 +53,62 @@ export default function TaskDetailPage() {
   const [bidAmount, setBidAmount] = useState("");
   const [bidComment, setBidComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [selectedBidId, setSelectedBidId] = useState<string | null>(null);
+  const [showWinnerSelect, setShowWinnerSelect] = useState(false);
+  const [isCardHolder, setIsCardHolder] = useState(false);
 
   function fetchTask() {
     fetch(`/api/tasks?status=`)
       .then((r) => r.json())
       .then((data) => {
         const found = data.tasks?.find((t: TaskDetail) => t.id === id);
-        if (found) setTask(found);
+        if (found) {
+          setTask(found);
+          // Calculate time remaining for auction
+          if (found.requestMode === "auction" && found.auctionSettings?.endsAt) {
+            const endsAt = new Date(found.auctionSettings.endsAt);
+            const remaining = Math.max(0, endsAt.getTime() - Date.now());
+            setTimeRemaining(remaining);
+          }
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    // Fetch user role
+    fetch("/api/crews")
+      .then((r) => r.json())
+      .then((data) => {
+        const activeCrew = data.crews?.find((c: any) => c.id === data.activeCrewId);
+        if (activeCrew?.role === "card_holder" || activeCrew?.role === "admin") {
+          setIsCardHolder(true);
+        }
+      })
+      .catch(() => {});
   }
 
   useEffect(() => {
     fetchTask();
   }, [id]);
+
+  // Countdown timer for auctions
+  useEffect(() => {
+    if (timeRemaining === null || timeRemaining <= 0) return;
+
+    const interval = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev === null || prev <= 1000) {
+          // Auction ended, refresh task
+          fetchTask();
+          return 0;
+        }
+        return prev - 1000;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timeRemaining]);
 
   useSSE({
     url: "/api/feed/stream",
@@ -144,6 +185,70 @@ export default function TaskDetailPage() {
     setSubmitting(false);
   }
 
+  async function handleCloseAuctionAuto() {
+    setSubmitting(true);
+    vibrate("medium");
+
+    try {
+      const res = await fetch(`/api/tasks/${id}/close-auction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "auto" }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      vibrate("success");
+      addToast("success", "Auction closed! Lowest bidder wins.");
+      fetchTask();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : "Failed to close auction");
+    }
+    setSubmitting(false);
+  }
+
+  async function handleSelectWinner() {
+    if (!selectedBidId) return;
+    setSubmitting(true);
+    vibrate("medium");
+
+    try {
+      const res = await fetch(`/api/tasks/${id}/close-auction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "select", bidId: selectedBidId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      vibrate("success");
+      addToast("success", "Winner selected!");
+      setShowWinnerSelect(false);
+      setSelectedBidId(null);
+      fetchTask();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : "Failed to select winner");
+    }
+    setSubmitting(false);
+  }
+
+  function formatTimeRemaining(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
   if (loading || !task) {
     return (
       <div className="px-4 pt-6 max-w-lg mx-auto">
@@ -153,6 +258,9 @@ export default function TaskDetailPage() {
   }
 
   const lowestBid = task.bids.length > 0 ? task.bids[0].bidAmount : task.pointCost;
+  const auctionExpired = task.requestMode === "auction" && 
+    task.auctionSettings?.endsAt && 
+    new Date(task.auctionSettings.endsAt) < new Date();
 
   return (
     <div className="px-4 pt-6 max-w-lg mx-auto space-y-4">
@@ -258,6 +366,24 @@ export default function TaskDetailPage() {
             <CardTitle>Reverse Auction</CardTitle>
           </div>
 
+          {/* Countdown Timer */}
+          {timeRemaining !== null && timeRemaining > 0 && (
+            <div className="flex items-center gap-2 mb-3 bg-royal-50 rounded-lg p-3">
+              <Clock className="w-4 h-4 text-royal" />
+              <span className="text-sm font-semibold text-royal">
+                {formatTimeRemaining(timeRemaining)} remaining
+              </span>
+            </div>
+          )}
+
+          {auctionExpired && (
+            <div className="mb-3 bg-warning-50 rounded-lg p-3">
+              <p className="text-sm font-semibold text-warning">
+                ⏰ Auction ended
+              </p>
+            </div>
+          )}
+
           <p className="text-sm text-muted mb-3">
             Current lowest bid: <strong className="text-royal font-mono">{lowestBid} pts</strong>
           </p>
@@ -271,7 +397,10 @@ export default function TaskDetailPage() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="flex items-center gap-2 bg-surface rounded-lg p-2"
+                  className={`flex items-center gap-2 rounded-lg p-2 ${
+                    showWinnerSelect ? "cursor-pointer hover:bg-royal-50" : "bg-surface"
+                  } ${selectedBidId === bid.id ? "bg-royal-100 ring-2 ring-royal" : ""}`}
+                  onClick={() => showWinnerSelect && setSelectedBidId(bid.id)}
                 >
                   <Avatar name={bid.userName} src={bid.userAvatar} size="sm" />
                   <div className="flex-1 min-w-0">
@@ -290,31 +419,90 @@ export default function TaskDetailPage() {
             </div>
           )}
 
-          {/* Place bid */}
-          <div className="space-y-2">
-            <Input
-              label="Your bid (points)"
-              type="number"
-              placeholder={`Lower than ${lowestBid}`}
-              value={bidAmount}
-              onChange={(e) => setBidAmount(e.target.value)}
-            />
-            <Input
-              label="Trash talk (optional)"
-              placeholder="I'm already at Walgreens..."
-              value={bidComment}
-              onChange={(e) => setBidComment(e.target.value)}
-            />
-            <Button
-              className="w-full"
-              loading={submitting}
-              onClick={handleBid}
-              disabled={!bidAmount || parseInt(bidAmount) >= lowestBid}
-            >
-              <Gavel className="w-4 h-4" />
-              Place Bid
-            </Button>
-          </div>
+          {/* Card Holder Controls */}
+          {isCardHolder && !auctionExpired && !showWinnerSelect && task.bids.length > 0 && (
+            <div className="space-y-2 mb-4">
+              <p className="text-xs text-muted font-semibold">Card Holder Controls</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  size="sm"
+                  onClick={handleCloseAuctionAuto}
+                  loading={submitting}
+                >
+                  <Award className="w-4 h-4" />
+                  Award Lowest
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  size="sm"
+                  onClick={() => setShowWinnerSelect(true)}
+                >
+                  <UserCheck className="w-4 h-4" />
+                  Select Winner
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Winner Selection Mode */}
+          {showWinnerSelect && (
+            <div className="space-y-2 mb-4">
+              <p className="text-sm font-semibold text-midnight">
+                Select a winner from the bids above
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowWinnerSelect(false);
+                    setSelectedBidId(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleSelectWinner}
+                  disabled={!selectedBidId}
+                  loading={submitting}
+                >
+                  Confirm Winner
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Place bid (non-Card Holders only) */}
+          {!isCardHolder && !auctionExpired && (
+            <div className="space-y-2">
+              <Input
+                label="Your bid (points)"
+                type="number"
+                placeholder={`Lower than ${lowestBid}`}
+                value={bidAmount}
+                onChange={(e) => setBidAmount(e.target.value)}
+              />
+              <Input
+                label="Trash talk (optional)"
+                placeholder="I'm already at Walgreens..."
+                value={bidComment}
+                onChange={(e) => setBidComment(e.target.value)}
+              />
+              <Button
+                className="w-full"
+                loading={submitting}
+                onClick={handleBid}
+                disabled={!bidAmount || parseInt(bidAmount) >= lowestBid}
+              >
+                <Gavel className="w-4 h-4" />
+                Place Bid
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 

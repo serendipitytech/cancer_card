@@ -1,0 +1,11 @@
+-- Migration: Auction Closing Mechanics
+-- Description: This migration documents the auction closing feature.
+-- No schema changes required as endsAt is already part of the auctionSettings JSON column.
+-- 
+-- Changes:
+-- - Auction duration is now configurable in the UI (30min to 24hr)
+-- - Auctions auto-close when endsAt is reached
+-- - Card Holders can manually close auctions and select winners
+-- - New API endpoints: POST /api/tasks/[id]/close-auction and GET /api/tasks/[id]/check-auction
+--
+-- No SQL changes needed.
