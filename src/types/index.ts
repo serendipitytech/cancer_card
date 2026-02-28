@@ -9,8 +9,26 @@ import type {
   activityFeed,
   taskMenuTemplates,
   selfCareRoutines,
+  notificationPreferences,
+  notificationLog,
+  pushTokens,
 } from "@/db/schema";
-export type { MemberStats, CrewSettings, AuctionSettings } from "@/db/schema";
+import type { NotificationEventType as _NotifEventType } from "@/lib/notification-types";
+
+export type {
+  MemberStats,
+  CrewSettings,
+  AuctionSettings,
+  ChannelPreferences,
+  EventPreferences,
+  QuietHours,
+  DigestSettings,
+} from "@/db/schema";
+export type {
+  NotificationEventType,
+  NotificationChannel,
+  NotificationStatus,
+} from "@/lib/notification-types";
 
 // ─── Database Row Types ──────────────────────────────────────────────────────
 
@@ -23,6 +41,9 @@ export type Milestone = InferSelectModel<typeof milestones>;
 export type ActivityFeedEntry = InferSelectModel<typeof activityFeed>;
 export type TaskMenuTemplate = InferSelectModel<typeof taskMenuTemplates>;
 export type SelfCareRoutine = InferSelectModel<typeof selfCareRoutines>;
+export type NotificationPreference = InferSelectModel<typeof notificationPreferences>;
+export type NotificationLogEntry = InferSelectModel<typeof notificationLog>;
+export type PushToken = InferSelectModel<typeof pushTokens>;
 
 // ─── Role Types ──────────────────────────────────────────────────────────────
 
@@ -31,15 +52,7 @@ export type TaskStatus = "pending" | "claimed" | "in_progress" | "completed" | "
 export type RequestMode = "direct" | "open" | "auction";
 export type Urgency = "whenever" | "today" | "asap";
 
-export type FeedEventType =
-  | "task_created"
-  | "task_claimed"
-  | "task_completed"
-  | "bid_placed"
-  | "auction_won"
-  | "milestone_logged"
-  | "badge_earned"
-  | "member_joined";
+export type FeedEventType = _NotifEventType;
 
 // ─── Badge Definitions ───────────────────────────────────────────────────────
 

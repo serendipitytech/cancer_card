@@ -1,5 +1,11 @@
-import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+import {
+  NOTIFICATION_EVENT_TYPES,
+  NOTIFICATION_CHANNELS,
+  NOTIFICATION_STATUSES,
+} from "@/lib/notification-types";
+import type { NotificationEventType } from "@/lib/notification-types";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
@@ -244,3 +250,135 @@ export const selfCareRoutines = sqliteTable("self_care_routines", {
     .notNull()
     .default(sql`(unixepoch())`),
 });
+
+// ─── Notification Preferences ───────────────────────────────────────────────
+
+export type ChannelPreferences = {
+  in_app: boolean;
+  email: boolean;
+  push: boolean;
+  sms: boolean;
+};
+
+export type EventPreferences = Record<NotificationEventType, boolean>;
+
+export type QuietHours = {
+  start: number; // 0-23
+  end: number; // 0-23
+  enabled: boolean;
+};
+
+export type DigestSettings = {
+  enabled: boolean;
+  frequency: "daily" | "weekly";
+};
+
+export const notificationPreferences = sqliteTable(
+  "notification_preferences",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    crewId: text("crew_id")
+      .notNull()
+      .references(() => crews.id, { onDelete: "cascade" }),
+    channels: text("channels", { mode: "json" })
+      .$type<ChannelPreferences>()
+      .notNull(),
+    eventPreferences: text("event_preferences", { mode: "json" })
+      .$type<EventPreferences>()
+      .notNull(),
+    quietHours: text("quiet_hours", { mode: "json" })
+      .$type<QuietHours>()
+      .notNull(),
+    digest: text("digest", { mode: "json" })
+      .$type<DigestSettings>()
+      .notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    uniqueIndex("notif_pref_user_crew").on(table.userId, table.crewId),
+    index("notif_pref_crew").on(table.crewId),
+  ]
+);
+
+// ─── Notification Log ───────────────────────────────────────────────────────
+
+export const notificationLog = sqliteTable(
+  "notification_log",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    crewId: text("crew_id")
+      .notNull()
+      .references(() => crews.id, { onDelete: "cascade" }),
+    eventType: text("event_type", {
+      enum: [...NOTIFICATION_EVENT_TYPES],
+    }).notNull(),
+    channel: text("channel", {
+      enum: [...NOTIFICATION_CHANNELS],
+    }).notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    data: text("data", { mode: "json" }).$type<Record<string, unknown>>(),
+    status: text("status", {
+      enum: [...NOTIFICATION_STATUSES],
+    })
+      .notNull()
+      .default("pending"),
+    sentAt: integer("sent_at", { mode: "timestamp" }),
+    readAt: integer("read_at", { mode: "timestamp" }),
+    failedAt: integer("failed_at", { mode: "timestamp" }),
+    retryCount: integer("retry_count").notNull().default(0),
+    errorMessage: text("error_message"),
+    externalId: text("external_id"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("notif_log_user_created").on(table.userId, table.createdAt),
+    index("notif_log_user_status_created").on(
+      table.userId,
+      table.status,
+      table.createdAt
+    ),
+    index("notif_log_crew_created").on(table.crewId, table.createdAt),
+    index("notif_log_status_created").on(table.status, table.createdAt),
+    index("notif_log_external_id").on(table.externalId),
+  ]
+);
+
+// ─── Push Tokens ────────────────────────────────────────────────────────────
+
+export const pushTokens = sqliteTable(
+  "push_tokens",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    authKey: text("auth_key").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("push_tokens_user").on(table.userId),
+    uniqueIndex("push_tokens_endpoint").on(table.endpoint),
+  ]
+);

@@ -1,3 +1,5 @@
+import type { NotificationEventType } from "@/lib/notification-types";
+
 type NotificationTemplate = {
   title: string;
   body: string;
@@ -102,4 +104,57 @@ export function getBadgeNotification(
     title: `${badgeEmoji} Badge Unlocked!`,
     body: `${memberName} just earned the ${badgeName} badge. Someone had to do it.`,
   };
+}
+
+// ─── Template Dispatcher ────────────────────────────────────────────────────
+
+export function getNotificationTemplate(
+  eventType: NotificationEventType,
+  data: Record<string, unknown>
+): NotificationTemplate | null {
+  const actorName = (data.actorName as string) || "Someone";
+  const taskTitle = (data.taskTitle as string) || "a task";
+
+  switch (eventType) {
+    case "task_created":
+      return getTaskCreatedNotification(
+        actorName,
+        taskTitle,
+        (data.mode as string) || "open"
+      );
+    case "task_claimed":
+      return getTaskClaimedNotification(actorName, taskTitle);
+    case "task_completed":
+      return getTaskCompletedNotification(actorName, taskTitle);
+    case "bid_placed":
+      return {
+        title: "New Bid",
+        body: `${actorName} bid ${data.bidAmount ?? "?"} pts on "${taskTitle}".`,
+      };
+    case "auction_won":
+      return getAuctionWonNotification(
+        actorName,
+        taskTitle,
+        (data.winningBid as number) || 0
+      );
+    case "milestone_logged":
+      return getMilestoneNotification(
+        actorName,
+        (data.milestoneType as string) || "milestone",
+        (data.pointsEarned as number) || 0
+      );
+    case "badge_earned":
+      return getBadgeNotification(
+        actorName,
+        (data.badgeName as string) || "a badge",
+        (data.badgeEmoji as string) || "🎖️"
+      );
+    case "member_joined":
+      return {
+        title: "New Crew Member",
+        body: `${actorName} joined the crew! Time to put them to work.`,
+      };
+    default:
+      return null;
+  }
 }

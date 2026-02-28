@@ -5,13 +5,26 @@ import { crews, crewMembers } from "@/db/schema";
 import { joinCrewSchema } from "@/lib/validators";
 import { eq, and } from "drizzle-orm";
 import { logActivity } from "@/lib/points";
+import { notifyOnEvent } from "@/lib/notification-service";
 import { setActiveCrewCookie } from "@/lib/cookies";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { allowed, resetAt } = checkRateLimit("crews:join", session.user.id, {
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 10,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many join attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
     }
 
     const body = await request.json();
@@ -65,6 +78,11 @@ export async function POST(request: Request) {
 
     logActivity(crew.id, "member_joined", session.user.id, {
       crewName: crew.name,
+    });
+
+    notifyOnEvent(crew.id, "member_joined", session.user.id, {
+      crewName: crew.name,
+      actorName: session.user.name || "Someone",
     });
 
     await setActiveCrewCookie(crew.id);

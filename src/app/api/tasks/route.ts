@@ -3,9 +3,11 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { tasks, crewMembers, users, bids } from "@/db/schema";
 import { createTaskSchema } from "@/lib/validators";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, count } from "drizzle-orm";
 import { logActivity } from "@/lib/points";
+import { notifyOnEvent } from "@/lib/notification-service";
 import { getUserActiveCrew } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const VALID_TASK_STATUSES = ["pending", "claimed", "in_progress", "completed", "cancelled"] as const;
 
@@ -14,6 +16,17 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { allowed, resetAt } = checkRateLimit("tasks:create", session.user.id, {
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 30,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many tasks created. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
     }
 
     const crew = await getUserActiveCrew(session.user.id);
@@ -75,6 +88,15 @@ export async function POST(request: Request) {
       pointCost: task.pointCost,
     });
 
+    notifyOnEvent(crew.crewId, "task_created", session.user.id, {
+      taskId: task.id,
+      taskTitle: task.title,
+      mode: task.requestMode,
+      pointCost: task.pointCost,
+      actorName: session.user.name || "Someone",
+      assignedTo: task.assignedTo,
+    });
+
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
     console.error("Create task error:", error);
@@ -92,6 +114,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { allowed, resetAt } = checkRateLimit("tasks:read", session.user.id, {
+      windowMs: 60 * 1000,
+      maxRequests: 120,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again shortly." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
+    }
+
     const crew = await getUserActiveCrew(session.user.id);
     if (!crew) {
       return NextResponse.json({ tasks: [] });
@@ -107,19 +140,37 @@ export async function GET(request: Request) {
       );
     }
 
+    const rawLimit = parseInt(searchParams.get("limit") || "50");
+    const rawOffset = parseInt(searchParams.get("offset") || "0");
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 50, 1), 100);
+    const offset = Math.max(Number.isFinite(rawOffset) ? rawOffset : 0, 0);
+
+    const whereCondition = status
+      ? and(eq(tasks.crewId, crew.crewId), eq(tasks.status, status as "pending"))
+      : eq(tasks.crewId, crew.crewId);
+
+    const totalResult = db
+      .select({ count: count() })
+      .from(tasks)
+      .where(whereCondition)
+      .get();
+    const total = totalResult?.count ?? 0;
+
+    if (total === 0) {
+      return NextResponse.json({ tasks: [], total: 0, limit, offset });
+    }
+
     const allTasks = db
       .select()
       .from(tasks)
-      .where(
-        status
-          ? and(eq(tasks.crewId, crew.crewId), eq(tasks.status, status as "pending"))
-          : eq(tasks.crewId, crew.crewId)
-      )
+      .where(whereCondition)
       .orderBy(desc(tasks.createdAt))
+      .limit(limit)
+      .offset(offset)
       .all();
 
     if (allTasks.length === 0) {
-      return NextResponse.json({ tasks: [] });
+      return NextResponse.json({ tasks: [], total, limit, offset });
     }
 
     const auctionTaskIds = allTasks
@@ -179,7 +230,7 @@ export async function GET(request: Request) {
       claimedUser: task.claimedBy ? userMap.get(task.claimedBy) ?? null : null,
     }));
 
-    return NextResponse.json({ tasks: tasksWithDetails });
+    return NextResponse.json({ tasks: tasksWithDetails, total, limit, offset });
   } catch (error) {
     console.error("Get tasks error:", error);
     return NextResponse.json(

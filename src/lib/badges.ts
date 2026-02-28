@@ -1,8 +1,11 @@
 import type { MemberStats } from "@/types";
 import { db } from "@/db";
-import { crewMembers } from "@/db/schema";
+import { crewMembers, users } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { logActivity } from "@/lib/points";
+import { notifyOnEvent } from "@/lib/notification-service";
 export { BADGE_DEFINITIONS, getBadgeDefinition } from "./badge-definitions";
+import { getBadgeDefinition } from "./badge-definitions";
 
 export function evaluateBadges(
   userId: string,
@@ -67,4 +70,28 @@ export function awardBadges(userId: string, crewId: string, badgeIds: string[]) 
     .set({ badges: updatedBadges })
     .where(eq(crewMembers.id, member.id))
     .run();
+
+  const user = db
+    .select({ displayName: users.displayName })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  const actorName = user?.displayName || "Someone";
+
+  for (const badgeId of badgeIds) {
+    const badge = getBadgeDefinition(badgeId);
+    logActivity(crewId, "badge_earned", userId, {
+      badgeId,
+      badgeName: badge?.name || badgeId,
+      badgeEmoji: badge?.emoji || "🎖️",
+    });
+
+    notifyOnEvent(crewId, "badge_earned", userId, {
+      userId,
+      badgeId,
+      badgeName: badge?.name || badgeId,
+      badgeEmoji: badge?.emoji || "🎖️",
+      actorName,
+    });
+  }
 }

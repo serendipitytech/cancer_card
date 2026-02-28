@@ -44,9 +44,9 @@
 | 1.5 | Test auction bidding with SSE | done | P0 | |
 | 1.6 | Test self-care logging + streak bonuses | done | P0 | |
 | 1.7 | Generate AUTH_SECRET for production | done | P0 | |
-| 1.8 | Set up Resend API key + verified domain | next | P1 | API key set, domain verification TBD |
+| 1.8 | Set up Resend API key + verified domain | done | P1 | Working, emails sending |
 | 1.9 | Docker build + test locally | done | P1 | |
-| 1.10 | Generate PWA icons (192x192, 512x512) | next | P1 | Home screen app icon |
+| 1.10 | Generate PWA icons (192x192, 512x512) | done | P1 | Purple circle + white spade |
 | 1.11 | Deploy to VPS | done | P1 | cancer-card.serendipitylabs.cloud |
 | 1.12 | Set up reverse proxy (Traefik/Nginx) | done | P1 | Traefik + Let's Encrypt |
 | 1.13 | SQLite backup strategy | next | P2 | Cron job copying db file |
@@ -60,8 +60,8 @@
 | # | Feature | Status | Priority | Notes |
 |---|---------|--------|----------|-------|
 | 2.1 | Empty states with personality | planned | P1 | "No tasks yet - your crew is standing by" |
-| 2.2 | Loading skeletons on all pages | planned | P1 | Replace any remaining spinners |
-| 2.3 | Error boundaries with humor | planned | P1 | "Something went sideways" |
+| 2.2 | Loading skeletons on all pages | done | P1 | loading.tsx for (main) and (admin) |
+| 2.3 | Error boundaries with humor | done | P1 | error.tsx for root, (main), (auth), (admin) |
 | 2.4 | Pull-to-refresh on mobile | planned | P2 | Native app feel |
 | 2.5 | Haptic feedback integration | planned | P2 | Hook exists, wire to interactions |
 | 2.6 | Card-playing celebration animation | planned | P2 | Confetti/fanfare on "Play Card" |
@@ -96,13 +96,13 @@
 
 | # | Feature | Status | Priority | Notes |
 |---|---------|--------|----------|-------|
-| 4.1 | Email on task assigned (Direct mode) | planned | P1 | Via Resend |
-| 4.2 | Email on task claimed | planned | P1 | Card Holder gets notified |
+| 4.1 | Email on task assigned (Direct mode) | done | P1 | Via Resend, notifyOnEvent service |
+| 4.2 | Email on task claimed | done | P1 | Card Holder gets notified |
 | 4.3 | Email on auction ending soon | planned | P2 | 15 min warning |
-| 4.4 | Email digest (daily/weekly summary) | planned | P3 | Opt-in per user |
-| 4.5 | Push notifications (PWA) | planned | P2 | Service worker + Web Push API |
-| 4.6 | Notification preferences page | planned | P2 | Per-type opt-in/out |
-| 4.7 | In-app notification bell + unread count | planned | P1 | Header badge |
+| 4.4 | Email digest (daily/weekly summary) | planned | P3 | Schema ready, delivery deferred |
+| 4.5 | Push notifications (PWA) | planned | P2 | Push token API + schema ready, delivery deferred |
+| 4.6 | Notification preferences page | planned | P2 | API ready, UI ships with Settings Hub (3.1) |
+| 4.7 | In-app notification bell + unread count | done | P1 | Bell + bottom sheet panel, SSE stream |
 
 ---
 
@@ -144,9 +144,9 @@
 
 | # | Feature | Status | Priority | Notes |
 |---|---------|--------|----------|-------|
-| 7.1 | Crew member on multiple crews | future | P2 | User already deferred this |
-| 7.2 | Multiple crews per Card Holder | future | P3 | User already deferred this |
-| 7.3 | Crew switching UI | future | P2 | Dropdown/picker in header |
+| 7.1 | Crew member on multiple crews | done | P2 | crewMembers unique index on (crewId, userId) |
+| 7.2 | Multiple crews per Card Holder | done | P3 | API supports creating/joining multiple crews |
+| 7.3 | Crew switching UI | done | P2 | CrewSwitcher dropdown + active crew cookie |
 | 7.4 | Cross-crew leaderboard | future | P3 | For crew members helping multiple patients |
 | 7.5 | Crew templates ("Family", "Friends", "Neighbors") | future | P3 | Pre-built role suggestions |
 
@@ -190,7 +190,7 @@
 | I.1 | Automated SQLite backups (cron) | planned | P1 | Copy db to backup volume |
 | I.2 | Health check monitoring | planned | P2 | Uptime alerts |
 | I.3 | Error logging (Sentry or similar) | planned | P2 | |
-| I.4 | Rate limiting on API endpoints | planned | P1 | Prevent abuse |
+| I.4 | Rate limiting on API endpoints | done | P1 | All 16 API routes rate-limited, Retry-After headers |
 | I.5 | HTTPS via reverse proxy | done | P0 | Traefik + Let's Encrypt |
 | I.6 | CI/CD pipeline | future | P3 | GitHub Actions → Docker build → deploy |
 
@@ -205,10 +205,13 @@
 | 2025-02-10 | SSE over WebSocket | Simpler, works through proxies, sufficient for crew sizes |
 | 2025-02-10 | JWT over database sessions | No session table needed, works with SQLite single-writer |
 | 2025-02-10 | Negative balance allowed | Patient shouldn't be blocked from asking for help |
-| 2025-02-10 | Single crew per patient (MVP) | Multi-crew deferred to Phase 7 |
+| 2025-02-10 | Single crew per patient (MVP) | Multi-crew implemented in Phase 7 |
 | 2025-02-10 | Resend for email | User preference, good DX, generous free tier |
 | 2025-02-10 | Drizzle over Prisma | Better SQLite support, lighter, no codegen step |
 | 2025-02-10 | Port 3000 | No conflicts with existing local services |
 | 2026-02-10 | docker-compose.yml gitignored | Server-specific Traefik config; example file committed as template |
 | 2026-02-10 | Auto-migration via entrypoint | docker-entrypoint.sh applies Drizzle SQL on fresh databases |
 | 2026-02-10 | trustHost + secureCookie | Required for Auth.js behind HTTPS reverse proxy |
+| 2026-02-27 | Multi-crew implemented | Phase 7.1-7.3 shipped: crew switcher, multi-membership, active crew cookie |
+| 2026-02-27 | Full security audit + fix | 27 issues fixed: race conditions, auth bypass, CSP, rate limiting, a11y |
+| 2026-02-27 | Notification system | Multi-channel (in-app, email, push-ready, SMS-ready) with lazy preferences, quiet hours, and recipient routing |
