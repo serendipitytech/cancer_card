@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const uuidParamSchema = z.string().uuid("Invalid ID format");
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export const signupSchema = z.object({
@@ -41,11 +43,14 @@ export const createTaskSchema = z.object({
   title: z.string().min(1, "Title is required").max(100),
   description: z.string().max(500).optional(),
   category: z.string().min(1, "Category is required"),
-  pointCost: z.number().int().min(1, "Points must be at least 1"),
+  pointCost: z.number().int().min(1, "Points must be at least 1").max(10000, "Points cannot exceed 10,000"),
   requestMode: z.enum(["direct", "open", "auction"]),
   assignedTo: z.string().uuid().optional(),
   urgency: z.enum(["whenever", "today", "asap"]).default("whenever"),
-  dueBy: z.string().datetime().optional(),
+  dueBy: z.string().datetime().optional().refine(
+    (val) => !val || new Date(val) > new Date(),
+    "Due date must be in the future"
+  ),
   auctionSettings: z
     .object({
       minBid: z.number().int().min(1).default(5),

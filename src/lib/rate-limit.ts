@@ -14,7 +14,17 @@ type RateLimitResult = {
   resetAt: number;
 };
 
+export const RATE_LIMITS = {
+  read: { windowMs: 60 * 1000, maxRequests: 120 },
+  write: { windowMs: 60 * 60 * 1000, maxRequests: 30 },
+  sensitive: { windowMs: 60 * 60 * 1000, maxRequests: 5 },
+  bid: { windowMs: 60 * 60 * 1000, maxRequests: 60 },
+  stream: { windowMs: 60 * 1000, maxRequests: 5 },
+} as const;
+
 const stores = new Map<string, Map<string, RateLimitEntry>>();
+let lastCleanup = Date.now();
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 function getStore(namespace: string): Map<string, RateLimitEntry> {
   const existing = stores.get(namespace);
@@ -25,12 +35,31 @@ function getStore(namespace: string): Map<string, RateLimitEntry> {
   return store;
 }
 
+function maybeCleanup() {
+  const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+  lastCleanup = now;
+
+  for (const [namespace, store] of stores) {
+    for (const [key, entry] of store) {
+      if (now > entry.resetAt) {
+        store.delete(key);
+      }
+    }
+    if (store.size === 0) {
+      stores.delete(namespace);
+    }
+  }
+}
+
 export function checkRateLimit(
   namespace: string,
   key: string,
   config: RateLimitConfig,
   increment = 1
 ): RateLimitResult {
+  maybeCleanup();
+
   const store = getStore(namespace);
   const now = Date.now();
   const entry = store.get(key);
