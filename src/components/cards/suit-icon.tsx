@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 type Suit = "spade" | "heart" | "diamond" | "club";
@@ -49,7 +52,12 @@ export function RandomSuit({
   size = "md",
   className,
 }: Omit<SuitIconProps, "suit">) {
-  const suits: Suit[] = ["spade", "heart", "diamond", "club"];
-  const randomSuit = suits[Math.floor(Math.random() * suits.length)];
-  return <SuitIcon suit={randomSuit} size={size} className={className} />;
+  const [suit, setSuit] = useState<Suit>("spade");
+
+  useEffect(() => {
+    const suits: Suit[] = ["spade", "heart", "diamond", "club"];
+    setSuit(suits[Math.floor(Math.random() * suits.length)]);
+  }, []);
+
+  return <SuitIcon suit={suit} size={size} className={className} />;
 }

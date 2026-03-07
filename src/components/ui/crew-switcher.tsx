@@ -25,6 +25,8 @@ export function CrewSwitcher({ crews, activeCrewId }: CrewSwitcherProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const activeCrew = crews.find((c) => c.id === activeCrewId) ?? crews[0];
 
@@ -41,6 +43,7 @@ export function CrewSwitcher({ crews, activeCrewId }: CrewSwitcherProps) {
     function handleEscape(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setOpen(false);
+        triggerRef.current?.focus();
       }
     }
 
@@ -54,8 +57,16 @@ export function CrewSwitcher({ crews, activeCrewId }: CrewSwitcherProps) {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (open && menuRef.current) {
+      const firstItem = menuRef.current.querySelector('[role="menuitem"]') as HTMLElement | null;
+      firstItem?.focus();
+    }
+  }, [open]);
+
   async function handleSwitch(crewId: string) {
     setOpen(false);
+    triggerRef.current?.focus();
     try {
       const res = await fetch("/api/crews/switch", {
         method: "POST",
@@ -73,6 +84,7 @@ export function CrewSwitcher({ crews, activeCrewId }: CrewSwitcherProps) {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        ref={triggerRef}
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-haspopup="menu"
@@ -89,9 +101,25 @@ export function CrewSwitcher({ crews, activeCrewId }: CrewSwitcherProps) {
 
       {open && (
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Switch crew"
           className="absolute top-full left-0 mt-1 w-56 bg-surface rounded-xl shadow-raised border border-royal-100 z-50 overflow-hidden"
+          onKeyDown={(e) => {
+            const items = menuRef.current?.querySelectorAll('[role="menuitem"]');
+            if (!items) return;
+            const currentIndex = Array.from(items).findIndex((el) => el === document.activeElement);
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              const next = items[currentIndex + 1] || items[0];
+              (next as HTMLElement).focus();
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              const prev = items[currentIndex - 1] || items[items.length - 1];
+              (prev as HTMLElement).focus();
+            }
+          }}
         >
           <div className="py-1">
             {crews.map((crew) => {
@@ -100,6 +128,7 @@ export function CrewSwitcher({ crews, activeCrewId }: CrewSwitcherProps) {
                 <button
                   key={crew.id}
                   role="menuitem"
+                  tabIndex={-1}
                   aria-current={isActive ? "true" : undefined}
                   onClick={() => handleSwitch(crew.id)}
                   className={cn(
@@ -126,8 +155,10 @@ export function CrewSwitcher({ crews, activeCrewId }: CrewSwitcherProps) {
           <div className="border-t border-royal-100">
             <button
               role="menuitem"
+              tabIndex={-1}
               onClick={() => {
                 setOpen(false);
+                triggerRef.current?.focus();
                 router.push("/onboarding");
               }}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-cloud transition-colors min-h-[44px]"

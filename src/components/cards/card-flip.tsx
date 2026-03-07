@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { impactMedium } from "@/lib/haptics";
 import { SuitIcon } from "./suit-icon";
 
 type CardFlipProps = {
@@ -27,6 +28,7 @@ export function CardFlip({
   const handleFlip = () => {
     if (!isFlipped) {
       setIsFlipped(true);
+      impactMedium();
       onFlipComplete?.();
     }
   };
@@ -35,6 +37,10 @@ export function CardFlip({
     <div
       className={cn("perspective-[1000px] cursor-pointer", className)}
       onClick={handleFlip}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleFlip(); } }}
+      role="button"
+      tabIndex={0}
+      aria-label="Flip card"
     >
       <motion.div
         initial={autoFlip ? { rotateY: 180 } : { rotateY: 0 }}
