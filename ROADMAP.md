@@ -63,7 +63,7 @@
 | 2.2 | Loading skeletons on all pages | done | P1 | loading.tsx for (main) and (admin) |
 | 2.3 | Error boundaries with humor | done | P1 | error.tsx for root, (main), (auth), (admin) |
 | 2.4 | Pull-to-refresh on mobile | planned | P2 | Native app feel |
-| 2.5 | Haptic feedback integration | planned | P2 | Hook exists, wire to interactions |
+| 2.5 | Haptic feedback integration | done | P2 | Capacitor @capacitor/haptics, wired to card flip |
 | 2.6 | Card-playing celebration animation | planned | P2 | Confetti/fanfare on "Play Card" |
 | 2.7 | Auction countdown timer | planned | P1 | Visual timer on auction tasks |
 | 2.8 | Toast notifications for SSE events | planned | P1 | Real-time toasts when feed updates |
@@ -100,7 +100,7 @@
 | 4.2 | Email on task claimed | done | P1 | Card Holder gets notified |
 | 4.3 | Email on auction ending soon | planned | P2 | 15 min warning |
 | 4.4 | Email digest (daily/weekly summary) | planned | P3 | Schema ready, delivery deferred |
-| 4.5 | Push notifications (PWA) | planned | P2 | Push token API + schema ready, delivery deferred |
+| 4.5 | Push notifications (PWA + APNs) | planned | P2 | Push token schema supports web/APNs/FCM, delivery deferred |
 | 4.6 | Notification preferences page | planned | P2 | API ready, UI ships with Settings Hub (3.1) |
 | 4.7 | In-app notification bell + unread count | done | P1 | Bell + bottom sheet panel, SSE stream |
 
@@ -118,6 +118,24 @@
 | 5.4 | Install prompt UI | planned | P2 | Custom "Add to Home Screen" |
 | 5.5 | PWA splash screens | planned | P3 | iOS + Android |
 | 5.6 | App badge (unread count on icon) | planned | P3 | Navigator.setAppBadge() |
+
+---
+
+## Phase 5b: iOS Native Wrapper (Capacitor)
+
+> Native iOS shell pointing at production server.
+
+| # | Feature | Status | Priority | Notes |
+|---|---------|--------|----------|-------|
+| 5b.1 | Capacitor 7 + iOS platform setup | done | P1 | WebView → production server |
+| 5b.2 | WKAppBoundDomains for Auth.js cookies | done | P1 | Bypasses ITP cookie restrictions |
+| 5b.3 | Status bar + splash screen | done | P1 | Purple splash, light status bar text |
+| 5b.4 | Haptic feedback (card flip) | done | P2 | @capacitor/haptics |
+| 5b.5 | App lifecycle + external links | done | P2 | Foreground events, in-app browser |
+| 5b.6 | Push token schema (APNs + FCM) | done | P2 | Migration 0002, discriminated union validator |
+| 5b.7 | App icons + Xcode polish | next | P1 | Xcode launches, QA in progress |
+| 5b.8 | APNs push delivery (HTTP/2 client) | planned | P2 | Follow-up: server-side .p8 key integration |
+| 5b.9 | App Store submission | planned | P2 | TestFlight → review |
 
 ---
 
@@ -215,3 +233,6 @@
 | 2026-02-27 | Multi-crew implemented | Phase 7.1-7.3 shipped: crew switcher, multi-membership, active crew cookie |
 | 2026-02-27 | Full security audit + fix | 27 issues fixed: race conditions, auth bypass, CSP, rate limiting, a11y |
 | 2026-02-27 | Notification system | Multi-channel (in-app, email, push-ready, SMS-ready) with lazy preferences, quiet hours, and recipient routing |
+| 2026-02-28 | Capacitor 7 over Capacitor 8 | v8 requires Xcode 26 (not GA yet); v7 is stable and sufficient |
+| 2026-02-28 | Remote WebView over local assets | Next.js SSR can't be statically exported; Capacitor points at production server |
+| 2026-02-28 | Push token schema supports APNs/FCM | Discriminated union validator, synthesized endpoint for native tokens |
