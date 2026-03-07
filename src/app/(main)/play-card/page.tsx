@@ -52,6 +52,15 @@ const URGENCY_OPTIONS = [
   { value: "asap", label: "ASAP", color: "text-danger" },
 ] as const;
 
+const AUCTION_DURATION_OPTIONS = [
+  { value: 30, label: "30 min" },
+  { value: 60, label: "1 hr" },
+  { value: 120, label: "2 hr" },
+  { value: 240, label: "4 hr" },
+  { value: 480, label: "8 hr" },
+  { value: 1440, label: "24 hr" },
+] as const;
+
 export default function PlayCardPage() {
   const router = useRouter();
   const { addToast } = useToast();
@@ -71,6 +80,7 @@ export default function PlayCardPage() {
   const [mode, setMode] = useState<"direct" | "open" | "auction">("open");
   const [urgency, setUrgency] = useState<"whenever" | "today" | "asap">("whenever");
   const [pointCost, setPointCost] = useState(25);
+  const [auctionDuration, setAuctionDuration] = useState(60);
 
   useEffect(() => {
     fetch("/api/menu")
@@ -114,7 +124,7 @@ export default function PlayCardPage() {
           urgency,
           auctionSettings:
             mode === "auction"
-              ? { minBid: 5, durationMinutes: 60, autoCloseAfterBids: null }
+              ? { minBid: 5, durationMinutes: auctionDuration, autoCloseAfterBids: null }
               : undefined,
         }),
       });
@@ -314,6 +324,30 @@ export default function PlayCardPage() {
                 ))}
               </div>
             </div>
+
+            {/* Auction Duration (only for auction mode) */}
+            {mode === "auction" && (
+              <div>
+                <p className="font-heading font-bold text-midnight mb-2">
+                  Auction duration
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {AUCTION_DURATION_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setAuctionDuration(opt.value)}
+                      className={`py-2 rounded-button text-sm font-heading font-semibold transition-all min-h-[44px] min-w-0 ${
+                        auctionDuration === opt.value
+                          ? "bg-royal text-white"
+                          : "bg-royal-50 text-royal"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Urgency */}
             <div>
