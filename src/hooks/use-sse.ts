@@ -11,7 +11,9 @@ type SSEOptions = {
 
 export function useSSE({ url, onMessage, onError, enabled = true }: SSEOptions) {
   const eventSourceRef = useRef<EventSource | null>(null);
+  const retryCountRef = useRef(0);
   const [connected, setConnected] = useState(false);
+  const MAX_RETRIES = 5;
 
   const connect = useCallback(() => {
     if (!enabled) return;
@@ -21,6 +23,7 @@ export function useSSE({ url, onMessage, onError, enabled = true }: SSEOptions) 
 
     eventSource.onopen = () => {
       setConnected(true);
+      retryCountRef.current = 0;
     };
 
     eventSource.onmessage = (event) => {
@@ -36,8 +39,10 @@ export function useSSE({ url, onMessage, onError, enabled = true }: SSEOptions) 
       setConnected(false);
       onError?.(error);
 
-      if (eventSource.readyState === EventSource.CLOSED) {
-        setTimeout(connect, 3000);
+      if (eventSource.readyState === EventSource.CLOSED && retryCountRef.current < MAX_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000) + Math.random() * 1000;
+        retryCountRef.current += 1;
+        setTimeout(connect, delay);
       }
     };
   }, [url, onMessage, onError, enabled]);
