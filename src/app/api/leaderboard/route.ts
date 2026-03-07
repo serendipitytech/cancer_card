@@ -4,12 +4,24 @@ import { db } from "@/db";
 import { crewMembers, users } from "@/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { getUserActiveCrew } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { allowed, resetAt } = checkRateLimit("leaderboard:read", session.user.id, {
+      windowMs: 60 * 1000,
+      maxRequests: 120,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again shortly." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
     }
 
     const crew = await getUserActiveCrew(session.user.id);

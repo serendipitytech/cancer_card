@@ -42,7 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const user = db
           .select()
           .from(users)
-          .where(eq(users.email, parsed.data.email))
+          .where(eq(users.email, parsed.data.email.toLowerCase()))
           .get();
 
         if (!user) {

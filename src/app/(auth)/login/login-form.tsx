@@ -8,10 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SuitIcon } from "@/components/cards/suit-icon";
 
+function getSafeCallbackUrl(raw: string | null): string {
+  if (!raw) return "/dashboard";
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  return "/dashboard";
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

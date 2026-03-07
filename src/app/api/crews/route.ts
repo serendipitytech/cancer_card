@@ -7,12 +7,24 @@ import { generateInviteCode } from "@/lib/utils";
 import { seedCrewDefaults } from "@/db/seed";
 import { eq } from "drizzle-orm";
 import { setActiveCrewCookie, getActiveCrewCookie } from "@/lib/cookies";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { allowed, resetAt } = checkRateLimit("crews:create", session.user.id, {
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 5,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many crews created. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
     }
 
     const body = await request.json();
@@ -70,6 +82,17 @@ export async function GET() {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { allowed, resetAt } = checkRateLimit("crews:read", session.user.id, {
+      windowMs: 60 * 1000,
+      maxRequests: 120,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again shortly." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
     }
 
     const memberships = db

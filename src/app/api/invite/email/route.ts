@@ -39,14 +39,14 @@ export async function POST(request: Request) {
 
     const { emails } = parsed.data;
 
-    const { allowed } = checkRateLimit("invite-email", session.user.id, {
+    const { allowed, resetAt } = checkRateLimit("invite-email", session.user.id, {
       windowMs: 60 * 60 * 1000,
       maxRequests: 10,
     }, emails.length);
     if (!allowed) {
       return NextResponse.json(
         { error: "Too many invites sent. Try again later." },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
       );
     }
 

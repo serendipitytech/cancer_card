@@ -5,12 +5,24 @@ import { taskMenuTemplates } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getUserActiveCrew } from "@/lib/session";
 import { createTemplateSchema } from "@/lib/validators";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { allowed, resetAt } = checkRateLimit("menu:read", session.user.id, {
+      windowMs: 60 * 1000,
+      maxRequests: 120,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again shortly." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
     }
 
     const crew = await getUserActiveCrew(session.user.id);
@@ -46,6 +58,17 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { allowed, resetAt } = checkRateLimit("menu:create", session.user.id, {
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 30,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many templates created. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
     }
 
     const crew = await getUserActiveCrew(session.user.id);

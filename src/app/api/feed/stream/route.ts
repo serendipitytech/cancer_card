@@ -1,8 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { activityFeed, users } from "@/db/schema";
-import { eq, desc, gt, and } from "drizzle-orm";
+import { eq, desc, gte, and } from "drizzle-orm";
 import { getUserActiveCrew } from "@/lib/session";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,14 @@ export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  const { allowed, resetAt } = checkRateLimit("feed:stream", session.user.id, RATE_LIMITS.stream);
+  if (!allowed) {
+    return new Response("Too many connections", {
+      status: 429,
+      headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) },
+    });
   }
 
   const crew = await getUserActiveCrew(session.user.id);
@@ -47,7 +56,7 @@ export async function GET() {
             .where(
               and(
                 eq(activityFeed.crewId, crew.crewId),
-                gt(activityFeed.createdAt, lastChecked)
+                gte(activityFeed.createdAt, lastChecked)
               )
             )
             .orderBy(desc(activityFeed.createdAt))
@@ -56,7 +65,11 @@ export async function GET() {
 
           if (newEntries.length > 0) {
             sendEvent({ type: "updates", entries: newEntries });
-            lastChecked = new Date();
+            const maxCreatedAt = newEntries.reduce(
+              (max, e) => (e.createdAt > max ? e.createdAt : max),
+              lastChecked
+            );
+            lastChecked = new Date(maxCreatedAt.getTime() + 1);
           }
 
           sendEvent({ type: "heartbeat" });

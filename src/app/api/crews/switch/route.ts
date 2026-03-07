@@ -5,6 +5,7 @@ import { crewMembers } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { setActiveCrewCookie } from "@/lib/cookies";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const switchCrewSchema = z.object({
   crewId: z.string().uuid(),
@@ -15,6 +16,17 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { allowed, resetAt } = checkRateLimit("crews:switch", session.user.id, {
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 30,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
+      );
     }
 
     const body = await request.json();

@@ -9,14 +9,14 @@ import { checkRateLimit } from "@/lib/rate-limit";
 export async function POST(request: Request) {
   try {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    const { allowed } = checkRateLimit("signup", ip, {
+    const { allowed, resetAt } = checkRateLimit("signup", ip, {
       windowMs: 60 * 60 * 1000,
       maxRequests: 5,
     });
     if (!allowed) {
       return NextResponse.json(
         { error: "Too many signup attempts. Please try again later." },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(Math.ceil((resetAt - Date.now()) / 1000)) } }
       );
     }
 
