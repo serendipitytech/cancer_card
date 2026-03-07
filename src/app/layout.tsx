@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Nunito, Inter, JetBrains_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
 import { CapacitorInit } from "@/components/capacitor-init";
+import { VersionFooter } from "@/components/ui/version-footer";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -53,6 +54,7 @@ export default function RootLayout({
         <ToastProvider>
           {children}
         </ToastProvider>
+        <VersionFooter />
       </body>
     </html>
   );

@@ -1,8 +1,20 @@
 import type { NextConfig } from "next";
+import { execSync } from "child_process";
+
+function getGitSha(): string {
+  try {
+    return execSync("git rev-parse --short HEAD").toString().trim();
+  } catch {
+    return "dev";
+  }
+}
 
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["better-sqlite3"],
+  env: {
+    NEXT_PUBLIC_GIT_SHA: getGitSha(),
+  },
   async headers() {
     return [
       {
