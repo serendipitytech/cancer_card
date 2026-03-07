@@ -369,9 +369,11 @@ export const pushTokens = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    tokenType: text("token_type").notNull().default("web"),
     endpoint: text("endpoint").notNull(),
-    p256dh: text("p256dh").notNull(),
-    authKey: text("auth_key").notNull(),
+    p256dh: text("p256dh"),
+    authKey: text("auth_key"),
+    deviceToken: text("device_token"),
     userAgent: text("user_agent"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
@@ -380,5 +382,7 @@ export const pushTokens = sqliteTable(
   (table) => [
     index("push_tokens_user").on(table.userId),
     uniqueIndex("push_tokens_endpoint").on(table.endpoint),
+    // SQLite treats NULLs as distinct — web tokens (deviceToken=NULL) won't conflict
+    uniqueIndex("push_tokens_device_token").on(table.deviceToken),
   ]
 );

@@ -45,12 +45,25 @@ export const markReadSchema = z.union([
 
 // ─── Register Push Token ────────────────────────────────────────────────────
 
-export const registerPushTokenSchema = z.object({
-  endpoint: z.string().url(),
-  p256dh: z.string().min(1),
-  authKey: z.string().min(1),
-  userAgent: z.string().max(500).optional(),
-});
+export const registerPushTokenSchema = z.discriminatedUnion("tokenType", [
+  z.object({
+    tokenType: z.literal("web"),
+    endpoint: z.string().url(),
+    p256dh: z.string().min(1),
+    authKey: z.string().min(1),
+    userAgent: z.string().max(500).optional(),
+  }),
+  z.object({
+    tokenType: z.literal("apns"),
+    deviceToken: z.string().regex(/^[0-9a-fA-F]{64}$/, "Invalid APNs device token"),
+    userAgent: z.string().max(500).optional(),
+  }),
+  z.object({
+    tokenType: z.literal("fcm"),
+    deviceToken: z.string().min(1),
+    userAgent: z.string().max(500).optional(),
+  }),
+]);
 
 // ─── Notification List Query ────────────────────────────────────────────────
 

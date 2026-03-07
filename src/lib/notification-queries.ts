@@ -236,19 +236,59 @@ export function insertNotificationBatch(entries: NotificationInsert[]) {
 
 // ─── Push Tokens ────────────────────────────────────────────────────────────
 
-export function registerPushToken(
-  userId: string,
-  endpoint: string,
-  p256dh: string,
-  authKey: string,
-  userAgent?: string
-) {
+type WebTokenData = {
+  tokenType: "web";
+  endpoint: string;
+  p256dh: string;
+  authKey: string;
+  userAgent?: string;
+};
+
+type NativeTokenData = {
+  tokenType: "apns" | "fcm";
+  deviceToken: string;
+  userAgent?: string;
+};
+
+type PushTokenData = WebTokenData | NativeTokenData;
+
+export function registerPushToken(userId: string, data: PushTokenData) {
+  if (data.tokenType === "web") {
+    return db
+      .insert(pushTokens)
+      .values({
+        userId,
+        tokenType: "web",
+        endpoint: data.endpoint,
+        p256dh: data.p256dh,
+        authKey: data.authKey,
+        userAgent: data.userAgent ?? null,
+      })
+      .onConflictDoUpdate({
+        target: pushTokens.endpoint,
+        set: {
+          userId,
+          p256dh: data.p256dh,
+          authKey: data.authKey,
+          userAgent: data.userAgent ?? null,
+        },
+      })
+      .returning()
+      .get();
+  }
+
   return db
     .insert(pushTokens)
-    .values({ userId, endpoint, p256dh, authKey, userAgent: userAgent ?? null })
+    .values({
+      userId,
+      tokenType: data.tokenType,
+      endpoint: `${data.tokenType}://${data.deviceToken}`,
+      deviceToken: data.deviceToken,
+      userAgent: data.userAgent ?? null,
+    })
     .onConflictDoUpdate({
-      target: pushTokens.endpoint,
-      set: { userId, p256dh, authKey, userAgent: userAgent ?? null },
+      target: pushTokens.deviceToken,
+      set: { userId, userAgent: data.userAgent ?? null },
     })
     .returning()
     .get();

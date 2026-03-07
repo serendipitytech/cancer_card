@@ -15,6 +15,13 @@
       "when": 1772250588927,
       "tag": "0001_nervous_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1772335655591,
+      "tag": "0002_keen_vapor",
+      "breakpoints": true
     }
   ]
 }

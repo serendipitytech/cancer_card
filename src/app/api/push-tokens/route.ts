@@ -37,13 +37,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const token = registerPushToken(
-      session.user.id,
-      parsed.data.endpoint,
-      parsed.data.p256dh,
-      parsed.data.authKey,
-      parsed.data.userAgent
-    );
+    const token = registerPushToken(session.user.id, parsed.data);
 
     return NextResponse.json({ token }, { status: 201 });
   } catch (error) {
