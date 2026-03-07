@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { SuitIcon } from "@/components/cards/suit-icon";
 import { useToast } from "@/components/ui/toast";
+import { Celebration } from "@/components/ui/celebration";
 import { useHaptics } from "@/hooks/use-haptics";
+import { notificationSuccess } from "@/lib/haptics";
 
 type Template = {
   id: string;
@@ -81,6 +83,8 @@ export default function PlayCardPage() {
   const [urgency, setUrgency] = useState<"whenever" | "today" | "asap">("whenever");
   const [pointCost, setPointCost] = useState(25);
   const [auctionDuration, setAuctionDuration] = useState(60);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationPoints, setCelebrationPoints] = useState(0);
 
   useEffect(() => {
     fetch("/api/menu")
@@ -135,8 +139,10 @@ export default function PlayCardPage() {
       }
 
       vibrate("success");
+      notificationSuccess();
+      setCelebrationPoints(pointCost);
+      setShowCelebration(true);
       addToast("success", "Card played! Your crew has been summoned.");
-      router.push("/tasks");
     } catch (error) {
       addToast(
         "error",
@@ -465,6 +471,15 @@ export default function PlayCardPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Celebration
+        visible={showCelebration}
+        pointCost={celebrationPoints}
+        onComplete={() => {
+          setShowCelebration(false);
+          router.push("/tasks");
+        }}
+      />
     </div>
   );
 }
