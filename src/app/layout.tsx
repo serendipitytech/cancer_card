@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito, Inter, JetBrains_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
+import { CapacitorInit } from "@/components/capacitor-init";
 import "./globals.css";
 
 const nunito = Nunito({
@@ -36,8 +37,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
   themeColor: "#7C3AED",
 };
@@ -50,6 +49,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${nunito.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="antialiased">
+        <CapacitorInit />
         <ToastProvider>
           {children}
         </ToastProvider>

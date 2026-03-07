@@ -47,6 +47,10 @@ init_fullstack_project.sh
 docker-compose.yml
 docker-compose.override.yml
 
+# iOS / Capacitor
+ios/App/Pods/
+ios/App/App/public/
+
 # vercel
 .vercel
 
