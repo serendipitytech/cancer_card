@@ -200,6 +200,8 @@ export const activityFeed = sqliteTable("activity_feed", {
       "task_created",
       "task_claimed",
       "task_completed",
+      "task_assigned",
+      "task_cancelled",
       "bid_placed",
       "auction_won",
       "milestone_logged",

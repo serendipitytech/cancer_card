@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Gavel, CheckCircle, UserCheck, Clock, Award } from "lucide-react";
+import { ArrowLeft, Gavel, CheckCircle, UserCheck, Clock, Award, XCircle, UserPlus } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,10 @@ export default function TaskDetailPage() {
   const [selectedBidId, setSelectedBidId] = useState<string | null>(null);
   const [showWinnerSelect, setShowWinnerSelect] = useState(false);
   const [isCardHolder, setIsCardHolder] = useState(false);
+  const [showCloseOptions, setShowCloseOptions] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
+  const [crewMembers, setCrewMembers] = useState<Array<{ userId: string; displayName: string; avatarUrl: string | null }>>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   function fetchTask() {
     fetch(`/api/tasks?status=`)
@@ -76,13 +80,26 @@ export default function TaskDetailPage() {
       })
       .catch(() => setLoading(false));
 
-    // Fetch user role
+    // Fetch user role and crew members
     fetch("/api/crews")
       .then((r) => r.json())
       .then((data) => {
         const activeCrew = data.crews?.find((c: any) => c.id === data.activeCrewId);
         if (activeCrew?.role === "card_holder" || activeCrew?.role === "admin") {
           setIsCardHolder(true);
+          // Fetch crew members for assign dropdown
+          fetch("/api/leaderboard")
+            .then((r) => r.json())
+            .then((lb) => {
+              setCrewMembers(
+                (lb.leaderboard || []).map((m: any) => ({
+                  userId: m.userId,
+                  displayName: m.displayName,
+                  avatarUrl: m.avatarUrl,
+                }))
+              );
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {});
@@ -181,6 +198,59 @@ export default function TaskDetailPage() {
       fetchTask();
     } catch (error) {
       addToast("error", error instanceof Error ? error.message : "Failed to place bid");
+    }
+    setSubmitting(false);
+  }
+
+  async function handleCloseTask(action: "complete" | "cancel", creditUserId?: string) {
+    setSubmitting(true);
+    vibrate("medium");
+
+    try {
+      const res = await fetch(`/api/tasks/${id}/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, creditUserId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      vibrate("success");
+      addToast(
+        "success",
+        action === "complete" ? "Task completed!" : "Task closed."
+      );
+      setShowCloseOptions(false);
+      setSelectedMemberId(null);
+      fetchTask();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : "Failed to close task");
+    }
+    setSubmitting(false);
+  }
+
+  async function handleAssign(assigneeId: string) {
+    setSubmitting(true);
+    vibrate("medium");
+
+    try {
+      const res = await fetch(`/api/tasks/${id}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: assigneeId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      vibrate("success");
+      addToast("success", "Task assigned!");
+      setShowAssign(false);
+      setSelectedMemberId(null);
+      fetchTask();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : "Failed to assign");
     }
     setSubmitting(false);
   }
@@ -332,8 +402,110 @@ export default function TaskDetailPage() {
         )}
       </Card>
 
-      {/* Actions */}
-      {task.status === "pending" && task.requestMode !== "auction" && (
+      {/* Actions — Card Holder sees management controls */}
+      {isCardHolder && task.status === "pending" && task.requestMode !== "auction" && (
+        <div className="space-y-2">
+          {!showAssign && !showCloseOptions && (
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                size="lg"
+                onClick={() => setShowAssign(true)}
+                disabled={crewMembers.length === 0}
+              >
+                <UserPlus className="w-5 h-5" />
+                Assign
+              </Button>
+              <Button
+                variant="secondary"
+                className="flex-1"
+                size="lg"
+                onClick={() => setShowCloseOptions(true)}
+              >
+                <XCircle className="w-5 h-5" />
+                Close Task
+              </Button>
+            </div>
+          )}
+
+          {/* Assign flow */}
+          {showAssign && (
+            <Card padding="md">
+              <p className="text-sm font-semibold text-midnight mb-3">Assign to crew member</p>
+              <div className="space-y-1 max-h-48 overflow-y-auto mb-3">
+                {crewMembers.map((member) => (
+                  <button
+                    key={member.userId}
+                    onClick={() => setSelectedMemberId(member.userId)}
+                    className={`w-full flex items-center gap-2 rounded-lg p-2 text-left min-h-0 ${
+                      selectedMemberId === member.userId
+                        ? "bg-royal-100 ring-2 ring-royal"
+                        : "hover:bg-royal-50"
+                    }`}
+                  >
+                    <Avatar name={member.displayName} src={member.avatarUrl} size="sm" />
+                    <span className="text-sm font-medium text-midnight">{member.displayName}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => { setShowAssign(false); setSelectedMemberId(null); }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={!selectedMemberId}
+                  loading={submitting}
+                  onClick={() => selectedMemberId && handleAssign(selectedMemberId)}
+                >
+                  Assign
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {/* Close flow */}
+          {showCloseOptions && (
+            <Card padding="md">
+              <p className="text-sm font-semibold text-midnight mb-3">Close this task</p>
+              <div className="space-y-2">
+                <Button
+                  variant="success"
+                  className="w-full"
+                  loading={submitting}
+                  onClick={() => handleCloseTask("complete")}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Complete (deduct points)
+                </Button>
+                <Button
+                  variant="danger"
+                  className="w-full"
+                  loading={submitting}
+                  onClick={() => handleCloseTask("cancel")}
+                >
+                  <XCircle className="w-4 h-4" />
+                  Cancel (no points)
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => setShowCloseOptions(false)}
+                >
+                  Go Back
+                </Button>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Crew Member sees Claim */}
+      {!isCardHolder && task.status === "pending" && task.requestMode !== "auction" && (
         <Button
           className="w-full"
           size="lg"
@@ -345,7 +517,33 @@ export default function TaskDetailPage() {
         </Button>
       )}
 
-      {(task.status === "claimed" || task.status === "in_progress") && (
+      {/* Card Holder: close claimed/in-progress tasks with credit */}
+      {isCardHolder && (task.status === "claimed" || task.status === "in_progress") && (
+        <div className="space-y-2">
+          <Button
+            variant="success"
+            className="w-full"
+            size="lg"
+            loading={submitting}
+            onClick={() => handleCloseTask("complete", task.claimedBy ?? undefined)}
+          >
+            <CheckCircle className="w-5 h-5" />
+            Mark Complete
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            loading={submitting}
+            onClick={() => handleCloseTask("cancel")}
+          >
+            <XCircle className="w-5 h-5" />
+            Cancel Task
+          </Button>
+        </div>
+      )}
+
+      {/* Crew Member: mark their claimed task complete */}
+      {!isCardHolder && (task.status === "claimed" || task.status === "in_progress") && (
         <Button
           variant="success"
           className="w-full"
