@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Trophy, Award, Flame, Target } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { SuitIcon } from "@/components/cards/suit-icon";
+import { PullIndicator } from "@/components/ui/pull-indicator";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
 import { BADGE_DEFINITIONS } from "@/lib/badge-definitions";
 
 type LeaderboardEntry = {
@@ -27,20 +29,25 @@ export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetch("/api/leaderboard")
-      .then((r) => r.json())
-      .then((data) => {
-        setLeaderboard(data.leaderboard || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+  const fetchLeaderboard = useCallback(async () => {
+    const res = await fetch("/api/leaderboard");
+    const data = await res.json();
+    setLeaderboard(data.leaderboard || []);
   }, []);
+
+  useEffect(() => {
+    fetchLeaderboard().finally(() => setLoading(false));
+  }, [fetchLeaderboard]);
+
+  const { pullRef, pullDistance, isRefreshing } = usePullRefresh({
+    onRefresh: fetchLeaderboard,
+  });
 
   const medals = ["🥇", "🥈", "🥉"];
 
   return (
-    <div className="px-4 pt-6 max-w-lg mx-auto">
+    <div ref={pullRef} className="px-4 pt-6 max-w-lg mx-auto relative overflow-auto">
+      <PullIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
       <div className="text-center mb-6">
         <h1 className="font-heading font-extrabold text-2xl text-midnight">
           Crew Leaderboard

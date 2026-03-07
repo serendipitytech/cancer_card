@@ -1,6 +1,8 @@
 "use client";
 
+import { useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
@@ -14,9 +16,11 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PointDisplay } from "@/components/cards/point-display";
 import { SuitIcon } from "@/components/cards/suit-icon";
+import { PullIndicator } from "@/components/ui/pull-indicator";
 import { InviteShareActions } from "@/components/invite/invite-share-actions";
 import { CrewSwitcher } from "@/components/ui/crew-switcher";
 import { useTour } from "@/hooks/use-tour";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
 import { TourOverlay } from "@/components/tour/tour-overlay";
 import { timeAgo, getUrgencyLabel } from "@/lib/utils";
 
@@ -61,11 +65,22 @@ export function DashboardClient({
   activeCrewId,
 }: DashboardProps) {
   const tour = useTour(hasSeenTour);
+  const router = useRouter();
+
+  const handleRefresh = useCallback(async () => {
+    router.refresh();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }, [router]);
+
+  const { pullRef, pullDistance, isRefreshing } = usePullRefresh({
+    onRefresh: handleRefresh,
+  });
 
   const isCardHolder = role === "card_holder" || role === "admin";
 
   return (
-    <div className="px-4 pt-6 space-y-5 max-w-lg mx-auto">
+    <div ref={pullRef} className="px-4 pt-6 space-y-5 max-w-lg mx-auto relative overflow-auto">
+      <PullIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}

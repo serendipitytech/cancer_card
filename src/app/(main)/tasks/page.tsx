@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Filter, Clock, CheckCircle, Gavel } from "lucide-react";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { SuitIcon } from "@/components/cards/suit-icon";
+import { PullIndicator } from "@/components/ui/pull-indicator";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
 import { timeAgo, getUrgencyLabel } from "@/lib/utils";
 
 type TaskItem = {
@@ -37,19 +39,24 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
 
-  useEffect(() => {
+  const fetchTasks = useCallback(async () => {
     const url = filter ? `/api/tasks?status=${filter}` : "/api/tasks";
-    fetch(url)
-      .then((r) => r.json())
-      .then((data) => {
-        setTasks(data.tasks || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    const res = await fetch(url);
+    const data = await res.json();
+    setTasks(data.tasks || []);
   }, [filter]);
 
+  useEffect(() => {
+    fetchTasks().finally(() => setLoading(false));
+  }, [fetchTasks]);
+
+  const { pullRef, pullDistance, isRefreshing } = usePullRefresh({
+    onRefresh: fetchTasks,
+  });
+
   return (
-    <div className="px-4 pt-6 max-w-lg mx-auto">
+    <div ref={pullRef} className="px-4 pt-6 max-w-lg mx-auto relative overflow-auto">
+      <PullIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
       <div className="flex items-center justify-between mb-4">
         <h1 className="font-heading font-extrabold text-2xl text-midnight">
           Tasks

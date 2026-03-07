@@ -8,7 +8,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import { SuitIcon } from "@/components/cards/suit-icon";
+import { PullIndicator } from "@/components/ui/pull-indicator";
 import { useSSE } from "@/hooks/use-sse";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
 import { timeAgo } from "@/lib/utils";
 
 type FeedEntry = {
@@ -59,15 +61,19 @@ export default function FeedPage() {
   const [feed, setFeed] = useState<FeedEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetch("/api/feed?limit=50")
-      .then((r) => r.json())
-      .then((data) => {
-        setFeed(data.feed || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+  const fetchFeed = useCallback(async () => {
+    const res = await fetch("/api/feed?limit=50");
+    const data = await res.json();
+    setFeed(data.feed || []);
   }, []);
+
+  useEffect(() => {
+    fetchFeed().finally(() => setLoading(false));
+  }, [fetchFeed]);
+
+  const { pullRef, pullDistance, isRefreshing } = usePullRefresh({
+    onRefresh: fetchFeed,
+  });
 
   const handleSSEMessage = useCallback((data: unknown) => {
     const typed = data as { type: string; entries?: FeedEntry[] };
@@ -88,7 +94,8 @@ export default function FeedPage() {
   });
 
   return (
-    <div className="px-4 pt-6 max-w-lg mx-auto">
+    <div ref={pullRef} className="px-4 pt-6 max-w-lg mx-auto relative overflow-auto">
+      <PullIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} />
       <div className="flex items-center gap-2 mb-5">
         <h1 className="font-heading font-extrabold text-2xl text-midnight">
           Activity
