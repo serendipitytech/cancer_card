@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,8 @@ type BottomSheetProps = {
   className?: string;
 };
 
+const SPRING_CONFIG = { type: "spring" as const, damping: 30, stiffness: 300 };
+
 export function BottomSheet({
   open,
   onClose,
@@ -20,14 +22,38 @@ export function BottomSheet({
   children,
   className,
 }: BottomSheetProps) {
-  const sheetY = useMotionValue(0);
-  const backdropOpacity = useTransform(sheetY, [0, 300], [1, 0]);
+  const sheetY = useMotionValue(typeof window !== "undefined" ? window.innerHeight : 1000);
+  const backdropOpacity = useTransform(sheetY, (y: number) => {
+    const sheetHeight = sheetRef.current?.offsetHeight ?? window.innerHeight;
+    return Math.max(0, Math.min(1, 1 - y / sheetHeight));
+  });
   const dragStartRef = useRef(0);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const isAnimatingOut = useRef(false);
+
+  const getSheetHeight = useCallback(() => {
+    return sheetRef.current?.offsetHeight ?? window.innerHeight;
+  }, []);
+
+  const animateClose = useCallback(() => {
+    if (isAnimatingOut.current) return;
+    isAnimatingOut.current = true;
+    const height = getSheetHeight();
+    animate(sheetY, height, SPRING_CONFIG).then(() => {
+      isAnimatingOut.current = false;
+      onClose();
+    });
+  }, [sheetY, getSheetHeight, onClose]);
 
   useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
-      sheetY.set(0);
+      // Start off-screen, then animate in
+      sheetY.set(window.innerHeight);
+      // Use requestAnimationFrame so the sheet div mounts and we can measure it
+      requestAnimationFrame(() => {
+        animate(sheetY, 0, SPRING_CONFIG);
+      });
     } else {
       document.body.style.overflow = "";
     }
@@ -41,9 +67,9 @@ export function BottomSheet({
     info: { offset: { y: number }; velocity: { y: number } }
   ) {
     if (info.offset.y > 80 || info.velocity.y > 500) {
-      onClose();
+      animateClose();
     } else {
-      animate(sheetY, 0, { type: "spring", damping: 30, stiffness: 300 });
+      animate(sheetY, 0, SPRING_CONFIG);
     }
   }
 
@@ -52,19 +78,14 @@ export function BottomSheet({
       {open && (
         <>
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            key="bottom-sheet-backdrop"
             style={{ opacity: backdropOpacity }}
             className="fixed inset-0 z-50 bg-midnight/40 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={animateClose}
           />
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            key="bottom-sheet-panel"
+            ref={sheetRef}
             style={{ y: sheetY }}
             className={cn(
               "fixed bottom-0 left-0 right-0 z-50",
@@ -99,7 +120,7 @@ export function BottomSheet({
                     {title}
                   </h2>
                   <button
-                    onClick={onClose}
+                    onClick={animateClose}
                     className="p-2 rounded-full hover:bg-royal-50 text-muted min-h-0 min-w-0"
                   >
                     <X className="w-5 h-5" />

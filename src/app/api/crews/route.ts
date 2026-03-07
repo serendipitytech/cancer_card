@@ -131,6 +131,7 @@ export async function GET() {
           : {}),
       })),
       activeCrewId,
+      userId: session.user.id,
     });
   } catch (error) {
     console.error("Get crew error:", error);

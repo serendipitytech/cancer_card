@@ -150,9 +150,19 @@ export default function TasksPage() {
                       </Badge>
                     )}
 
+                    {task.requestMode === "direct_assign" && (
+                      <Badge variant="default">Direct</Badge>
+                    )}
+
                     {task.claimedUser && (
                       <span className="text-xs text-muted">
                         {task.claimedUser.displayName}
+                      </span>
+                    )}
+
+                    {!task.claimedUser && task.assignedUser && (
+                      <span className="text-xs text-muted">
+                        → {task.assignedUser.displayName}
                       </span>
                     )}
                   </div>

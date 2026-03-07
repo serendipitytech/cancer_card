@@ -57,6 +57,8 @@ export default function TaskDetailPage() {
   const [selectedBidId, setSelectedBidId] = useState<string | null>(null);
   const [showWinnerSelect, setShowWinnerSelect] = useState(false);
   const [isCardHolder, setIsCardHolder] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [roleLoading, setRoleLoading] = useState(true);
   const [showCloseOptions, setShowCloseOptions] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const [crewMembers, setCrewMembers] = useState<Array<{ userId: string; displayName: string; avatarUrl: string | null }>>([]);
@@ -79,11 +81,22 @@ export default function TaskDetailPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  }
 
-    // Fetch user role and crew members
+  // Fetch task data when id changes
+  useEffect(() => {
+    fetchTask();
+  }, [id]);
+
+  // Fetch role info once on mount (separate from task fetching)
+  useEffect(() => {
+    setRoleLoading(true);
     fetch("/api/crews")
       .then((r) => r.json())
       .then((data) => {
+        if (data.userId) {
+          setCurrentUserId(data.userId);
+        }
         const activeCrew = data.crews?.find((c: any) => c.id === data.activeCrewId);
         if (activeCrew?.role === "card_holder" || activeCrew?.role === "admin") {
           setIsCardHolder(true);
@@ -99,15 +112,14 @@ export default function TaskDetailPage() {
                 }))
               );
             })
-            .catch(() => {});
+            .catch(() => {})
+            .finally(() => setRoleLoading(false));
+        } else {
+          setRoleLoading(false);
         }
       })
-      .catch(() => {});
-  }
-
-  useEffect(() => {
-    fetchTask();
-  }, [id]);
+      .catch(() => setRoleLoading(false));
+  }, []);
 
   // Countdown timer for auctions
   useEffect(() => {
@@ -385,6 +397,15 @@ export default function TaskDetailPage() {
             {getUrgencyLabel(task.urgency)}
           </Badge>
           <Badge variant="muted">{task.category}</Badge>
+          {task.requestMode === "direct_assign" && (
+            <Badge variant="default">Direct</Badge>
+          )}
+          {task.requestMode === "auction" && (
+            <Badge variant="default">Auction</Badge>
+          )}
+          {task.requestMode === "open" && (
+            <Badge variant="muted">Open</Badge>
+          )}
         </div>
 
         {task.claimedUser && (
@@ -400,160 +421,213 @@ export default function TaskDetailPage() {
             <Badge variant="success">claimed</Badge>
           </div>
         )}
+
+        {!task.claimedUser && task.assignedUser && (
+          <div className="flex items-center gap-2 mt-4 justify-center">
+            <Avatar
+              name={task.assignedUser.displayName}
+              src={task.assignedUser.avatarUrl}
+              size="sm"
+            />
+            <span className="text-sm font-medium text-midnight">
+              {task.assignedUser.displayName}
+            </span>
+            <Badge variant="default">assigned</Badge>
+          </div>
+        )}
       </Card>
 
-      {/* Actions — Card Holder sees management controls */}
-      {isCardHolder && task.status === "pending" && task.requestMode !== "auction" && (
-        <div className="space-y-2">
-          {!showAssign && !showCloseOptions && (
-            <div className="flex gap-2">
+      {/* === Action Buttons (guarded by roleLoading) === */}
+      {!roleLoading && (
+        <>
+          {/* ── Card Holder Actions ── */}
+
+          {/* CH: pending + non-auction */}
+          {isCardHolder && task.status === "pending" && task.requestMode !== "auction" && (
+            <div className="space-y-2">
+              {/* Assignment status message */}
+              {task.assignedTo && !showAssign && !showCloseOptions && (
+                <Card padding="sm">
+                  <p className="text-sm text-muted text-center">
+                    Assigned to{" "}
+                    <span className="font-semibold text-midnight">
+                      {task.assignedUser?.displayName ?? "a crew member"}
+                    </span>
+                    , waiting to claim
+                  </p>
+                </Card>
+              )}
+
+              {!showAssign && !showCloseOptions && (
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1"
+                    size="lg"
+                    onClick={() => setShowAssign(true)}
+                    disabled={crewMembers.length === 0}
+                  >
+                    <UserPlus className="w-5 h-5" />
+                    {task.assignedTo ? "Reassign" : "Assign"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    size="lg"
+                    onClick={() => setShowCloseOptions(true)}
+                  >
+                    <XCircle className="w-5 h-5" />
+                    Close Task
+                  </Button>
+                </div>
+              )}
+
+              {/* Assign flow */}
+              {showAssign && (
+                <Card padding="md">
+                  <p className="text-sm font-semibold text-midnight mb-3">Assign to crew member</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto mb-3">
+                    {crewMembers.map((member) => (
+                      <button
+                        key={member.userId}
+                        onClick={() => setSelectedMemberId(member.userId)}
+                        className={`w-full flex items-center gap-2 rounded-lg p-2 text-left min-h-0 ${
+                          selectedMemberId === member.userId
+                            ? "bg-royal-100 ring-2 ring-royal"
+                            : "hover:bg-royal-50"
+                        }`}
+                      >
+                        <Avatar name={member.displayName} src={member.avatarUrl} size="sm" />
+                        <span className="text-sm font-medium text-midnight">{member.displayName}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => { setShowAssign(false); setSelectedMemberId(null); }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      disabled={!selectedMemberId}
+                      loading={submitting}
+                      onClick={() => selectedMemberId && handleAssign(selectedMemberId)}
+                    >
+                      Assign
+                    </Button>
+                  </div>
+                </Card>
+              )}
+
+              {/* Close flow */}
+              {showCloseOptions && (
+                <Card padding="md">
+                  <p className="text-sm font-semibold text-midnight mb-3">Close this task</p>
+                  <div className="space-y-2">
+                    <Button
+                      variant="success"
+                      className="w-full"
+                      loading={submitting}
+                      onClick={() => handleCloseTask("complete")}
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Complete (deduct points)
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="w-full"
+                      loading={submitting}
+                      onClick={() => handleCloseTask("cancel")}
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Cancel (no points)
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => setShowCloseOptions(false)}
+                    >
+                      Go Back
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* CH: claimed / in_progress */}
+          {isCardHolder && (task.status === "claimed" || task.status === "in_progress") && (
+            <div className="space-y-2">
               <Button
-                className="flex-1"
+                variant="success"
+                className="w-full"
                 size="lg"
-                onClick={() => setShowAssign(true)}
-                disabled={crewMembers.length === 0}
+                loading={submitting}
+                onClick={() => handleCloseTask("complete", task.claimedBy ?? undefined)}
               >
-                <UserPlus className="w-5 h-5" />
-                Assign
+                <CheckCircle className="w-5 h-5" />
+                Mark Complete
               </Button>
               <Button
                 variant="secondary"
-                className="flex-1"
-                size="lg"
-                onClick={() => setShowCloseOptions(true)}
+                className="w-full"
+                loading={submitting}
+                onClick={() => handleCloseTask("cancel")}
               >
                 <XCircle className="w-5 h-5" />
-                Close Task
+                Cancel Task
               </Button>
             </div>
           )}
 
-          {/* Assign flow */}
-          {showAssign && (
+          {/* ── Crew Member Actions ── */}
+
+          {/* CM: pending + open mode → claim */}
+          {!isCardHolder && task.status === "pending" && task.requestMode === "open" && (
+            <Button
+              className="w-full"
+              size="lg"
+              loading={submitting}
+              onClick={handleClaim}
+            >
+              <UserCheck className="w-5 h-5" />
+              Claim This Task
+            </Button>
+          )}
+
+          {/* CM: pending + direct_assign + assigned to ME → claim */}
+          {!isCardHolder && task.status === "pending" && task.requestMode === "direct_assign" && task.assignedTo === currentUserId && (
+            <Button
+              className="w-full"
+              size="lg"
+              loading={submitting}
+              onClick={handleClaim}
+            >
+              <UserCheck className="w-5 h-5" />
+              Claim This Task
+            </Button>
+          )}
+
+          {/* CM: pending + direct_assign + assigned to someone else → info */}
+          {!isCardHolder && task.status === "pending" && task.requestMode === "direct_assign" && task.assignedTo && task.assignedTo !== currentUserId && (
             <Card padding="md">
-              <p className="text-sm font-semibold text-midnight mb-3">Assign to crew member</p>
-              <div className="space-y-1 max-h-48 overflow-y-auto mb-3">
-                {crewMembers.map((member) => (
-                  <button
-                    key={member.userId}
-                    onClick={() => setSelectedMemberId(member.userId)}
-                    className={`w-full flex items-center gap-2 rounded-lg p-2 text-left min-h-0 ${
-                      selectedMemberId === member.userId
-                        ? "bg-royal-100 ring-2 ring-royal"
-                        : "hover:bg-royal-50"
-                    }`}
-                  >
-                    <Avatar name={member.displayName} src={member.avatarUrl} size="sm" />
-                    <span className="text-sm font-medium text-midnight">{member.displayName}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => { setShowAssign(false); setSelectedMemberId(null); }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1"
-                  disabled={!selectedMemberId}
-                  loading={submitting}
-                  onClick={() => selectedMemberId && handleAssign(selectedMemberId)}
-                >
-                  Assign
-                </Button>
-              </div>
+              <p className="text-sm text-muted text-center">
+                This task was assigned to someone else.
+              </p>
             </Card>
           )}
 
-          {/* Close flow */}
-          {showCloseOptions && (
+          {/* CM: claimed by ME → status message */}
+          {!isCardHolder && (task.status === "claimed" || task.status === "in_progress") && task.claimedBy === currentUserId && (
             <Card padding="md">
-              <p className="text-sm font-semibold text-midnight mb-3">Close this task</p>
-              <div className="space-y-2">
-                <Button
-                  variant="success"
-                  className="w-full"
-                  loading={submitting}
-                  onClick={() => handleCloseTask("complete")}
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Complete (deduct points)
-                </Button>
-                <Button
-                  variant="danger"
-                  className="w-full"
-                  loading={submitting}
-                  onClick={() => handleCloseTask("cancel")}
-                >
-                  <XCircle className="w-4 h-4" />
-                  Cancel (no points)
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => setShowCloseOptions(false)}
-                >
-                  Go Back
-                </Button>
-              </div>
+              <p className="text-sm text-muted text-center">
+                You claimed this task. The Card Holder will mark it complete when you&apos;re done.
+              </p>
             </Card>
           )}
-        </div>
-      )}
-
-      {/* Crew Member sees Claim */}
-      {!isCardHolder && task.status === "pending" && task.requestMode !== "auction" && (
-        <Button
-          className="w-full"
-          size="lg"
-          loading={submitting}
-          onClick={handleClaim}
-        >
-          <UserCheck className="w-5 h-5" />
-          Claim This Task
-        </Button>
-      )}
-
-      {/* Card Holder: close claimed/in-progress tasks with credit */}
-      {isCardHolder && (task.status === "claimed" || task.status === "in_progress") && (
-        <div className="space-y-2">
-          <Button
-            variant="success"
-            className="w-full"
-            size="lg"
-            loading={submitting}
-            onClick={() => handleCloseTask("complete", task.claimedBy ?? undefined)}
-          >
-            <CheckCircle className="w-5 h-5" />
-            Mark Complete
-          </Button>
-          <Button
-            variant="secondary"
-            className="w-full"
-            loading={submitting}
-            onClick={() => handleCloseTask("cancel")}
-          >
-            <XCircle className="w-5 h-5" />
-            Cancel Task
-          </Button>
-        </div>
-      )}
-
-      {/* Crew Member: mark their claimed task complete */}
-      {!isCardHolder && (task.status === "claimed" || task.status === "in_progress") && (
-        <Button
-          variant="success"
-          className="w-full"
-          size="lg"
-          loading={submitting}
-          onClick={handleComplete}
-        >
-          <CheckCircle className="w-5 h-5" />
-          Mark Complete
-        </Button>
+        </>
       )}
 
       {/* Auction Section */}
@@ -618,7 +692,7 @@ export default function TaskDetailPage() {
           )}
 
           {/* Card Holder Controls */}
-          {isCardHolder && !auctionExpired && !showWinnerSelect && task.bids.length > 0 && (
+          {!roleLoading && isCardHolder && !auctionExpired && !showWinnerSelect && task.bids.length > 0 && (
             <div className="space-y-2 mb-4">
               <p className="text-xs text-muted font-semibold">Card Holder Controls</p>
               <div className="flex gap-2">
@@ -675,7 +749,7 @@ export default function TaskDetailPage() {
           )}
 
           {/* Place bid (non-Card Holders only) */}
-          {!isCardHolder && !auctionExpired && (
+          {!roleLoading && !isCardHolder && !auctionExpired && (
             <div className="space-y-2">
               <Input
                 label="Your bid (points)"
