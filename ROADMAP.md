@@ -59,14 +59,14 @@
 
 | # | Feature | Status | Priority | Notes |
 |---|---------|--------|----------|-------|
-| 2.1 | Empty states with personality | planned | P1 | "No tasks yet - your crew is standing by" |
+| 2.1 | Empty states with personality | done | P1 | All list pages + self-care empty state with card motif |
 | 2.2 | Loading skeletons on all pages | done | P1 | loading.tsx for (main) and (admin) |
 | 2.3 | Error boundaries with humor | done | P1 | error.tsx for root, (main), (auth), (admin) |
-| 2.4 | Pull-to-refresh on mobile | planned | P2 | Native app feel |
+| 2.4 | Pull-to-refresh on mobile | done | P2 | usePullRefresh hook + PullIndicator on all 5 main pages |
 | 2.5 | Haptic feedback integration | done | P2 | Capacitor @capacitor/haptics, wired to card flip |
-| 2.6 | Card-playing celebration animation | planned | P2 | Confetti/fanfare on "Play Card" |
-| 2.7 | Auction countdown timer | planned | P1 | Visual timer on auction tasks |
-| 2.8 | Toast notifications for SSE events | planned | P1 | Real-time toasts when feed updates |
+| 2.6 | Card-playing celebration animation | done | P2 | Falling suit symbols + spring text + haptic feedback |
+| 2.7 | Auction countdown timer | done | P1 | PR #4: deadline, auto-close, manual winner selection |
+| 2.8 | Toast notifications for SSE events | done | P1 | Custom toast provider with 4 types, Framer Motion |
 | 2.9 | Keyboard shortcuts for desktop | planned | P3 | Power users |
 | 2.10 | Dark mode | planned | P3 | Design tokens already in CSS vars |
 
