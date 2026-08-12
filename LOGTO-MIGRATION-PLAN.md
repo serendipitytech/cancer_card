@@ -90,9 +90,17 @@ Settled with Troy:
 - **Logto ownership:** sysadmin owns the instance; this session owns the Cancer Card app-code integration; coordination brief handed to the sysadmin/serendipity agent.
 - **Instance readiness (HA, backup of `logto-db`, down/recovery notifications):** CoS/sysadmin's issue, not a blocker for the Cancer Card cutover.
 
-Parked, pending a pros/cons discussion with sysadmin (do NOT build until resolved):
-- **Integration approach + branding depth (Q4).** Spectrum on a self-hosted Logto: (1) themed hosted sign-in with per-app logo/color/custom CSS, (2) custom domain so the sign-in page lives on an app-controlled domain, (3) bring-your-own-UI via the Experience API. Options 1+2 keep the "add a connector later with no app change" property; option 3 gives full in-app control but returns the per-method app work. Recommendation to settle with sysadmin: 1+2 unless the login screen is judged a critical brand moment.
-- **Session TTL + MFA policy**, and the **`ADMIN_EMAILS` allowlist fate** (stay app-side vs become a Logto role). Both depend on the approach decision above.
+Resolved by the Logto owner (sysadmin/CoS, 2026-08-12):
+- **Integration approach + branding (Q4): DECIDED = Option 1, themed HOSTED sign-in** on `auth.serendipitylabs.cloud`, per-app branding (logo/color/custom CSS), supported on the self-hosted 1.42. Preserves "add a connector later with no app change." Option 2 (custom domain) deferred, not needed for launch. Option 3 (BYO-UI/Experience API) explicitly ruled out (breaks connector-agility, and we would own auth-UI security/maintenance). Build against `@logto/next` + the hosted per-app-branded page.
+- **Logto apps registered** in the `default` tenant (both Traditional web / OIDC):
+  - prod: app id `p05kwhwquof0pylsvxpni`, redirect `https://cancer-card.serendipitylabs.cloud/callback`, post-logout `https://cancer-card.serendipitylabs.cloud/`. Creds vaulted: `cancer-card/logto-app-id`, `cancer-card/logto-app-secret`.
+  - dev: app id `q0h069oj2in6tl00rocm7`, redirect `http://localhost:3000/callback`. Creds vaulted: `cancer-card/logto-dev-app-id`, `cancer-card/logto-dev-app-secret`. (Swap to a real staging domain later; redirect URIs are updatable via the Management API.)
+- **Connector roadmap:** launch on email + password + email magic-code (live). Google OAuth provisioned this sprint by the Logto owner (free). SMS (Twilio, already vaulted) deferred post-launch, per-message cost = Troy cost-go. Apple deferred post-launch, needs an Apple Developer account ($99/yr) + Services ID + signing key + approval lead time = Troy cost-go.
+- **Account deletion:** the vaulted M2M creds (`logto/mgmt-api-client-id` + `-client-secret`) are confirmed usable for `DELETE /api/users/{id}`. Use that grant; never self-authorize off the built-in `m-default` secret.
+- **Instance readiness (org-wide, NOT a Cancer Card blocker):** the Logto owner confirmed `logto-db` is not yet in the nightly S3 backup and there is no uptime/down alerting on `auth.serendipitylabs.cloud`; both are being folded into a sysadmin pass. Capacity is fine.
+
+Still open, to settle DURING the build (now unblocked by the Q4 decision):
+- **Session TTL + MFA policy** (Logto-side config), and the **`ADMIN_EMAILS` allowlist fate** (stay app-side vs become a Logto role).
 
 ## 11. Sequence with the other critical items
 
