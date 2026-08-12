@@ -12,7 +12,7 @@ CREATE TABLE `__new_push_tokens` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-INSERT INTO `__new_push_tokens`("id", "user_id", "token_type", "endpoint", "p256dh", "auth_key", "device_token", "user_agent", "created_at") SELECT "id", "user_id", "token_type", "endpoint", "p256dh", "auth_key", "device_token", "user_agent", "created_at" FROM `push_tokens`;--> statement-breakpoint
+INSERT INTO `__new_push_tokens`("id", "user_id", "endpoint", "p256dh", "auth_key", "user_agent", "created_at") SELECT "id", "user_id", "endpoint", "p256dh", "auth_key", "user_agent", "created_at" FROM `push_tokens`;--> statement-breakpoint
 DROP TABLE `push_tokens`;--> statement-breakpoint
 ALTER TABLE `__new_push_tokens` RENAME TO `push_tokens`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint

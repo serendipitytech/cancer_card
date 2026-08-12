@@ -1,7 +1,7 @@
 FROM node:20-alpine AS base
 
 # Install dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ git
 
 # ─── Dependencies ─────────────────────────────────────────────────────────────
 FROM base AS deps
@@ -41,8 +41,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy drizzle migrations and entrypoint
+# Copy drizzle migrations, the migration runner, and the entrypoint
 COPY --from=builder /app/drizzle ./drizzle
+COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
 
 USER nextjs

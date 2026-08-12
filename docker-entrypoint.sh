@@ -1,21 +1,14 @@
 #!/bin/sh
 set -e
 
-DB_PATH="${DATABASE_PATH:-/data/app.db}"
+# Apply any pending database migrations before starting the server.
+# The runner is journal-aware and idempotent: it backs up the DB (WAL-safe)
+# before applying, tracks applied migrations in __drizzle_migrations, and is a
+# no-op when the schema is already current. This replaces the old "migrate only
+# on an empty database" logic, which let production silently drift behind the
+# schema.
+echo "Running database migrations..."
+node /app/scripts/migrate.cjs
 
-# Apply migrations if the database has no tables (fresh volume)
-TABLE_COUNT=$(sqlite3 "$DB_PATH" "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%';" 2>/dev/null || echo "0")
-
-if [ "$TABLE_COUNT" = "0" ]; then
-  echo "Empty database detected — applying migrations..."
-  for f in /app/drizzle/*.sql; do
-    echo "  Applying $(basename "$f")"
-    # Split on Drizzle's statement breakpoint marker and execute each statement
-    sed 's/--> statement-breakpoint//' "$f" | sqlite3 "$DB_PATH"
-  done
-  echo "Migrations complete."
-else
-  echo "Database has $TABLE_COUNT tables — skipping migrations."
-fi
-
+echo "Starting server..."
 exec node server.js
