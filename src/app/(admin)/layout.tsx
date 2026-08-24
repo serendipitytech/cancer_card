@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { AdminNav } from "@/components/admin/admin-nav";
 
+// Admin pages query the DB directly and are auth-gated: force dynamic so the
+// build never tries to prerender them against a non-existent build-time DB.
+export const dynamic = "force-dynamic";
+
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
   .split(",")
   .map((e) => e.trim().toLowerCase())
@@ -15,7 +19,7 @@ export default async function AdminLayout({
   const session = await auth();
 
   if (!session?.user) {
-    redirect("/login?callbackUrl=/admin");
+    redirect("/sign-in");
   }
 
   if (

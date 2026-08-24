@@ -3,7 +3,6 @@
 import { useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   Zap,
@@ -11,6 +10,7 @@ import {
   ClipboardList,
   ChevronRight,
   LogOut,
+  Settings,
 } from "lucide-react";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -309,15 +309,24 @@ export function DashboardClient({
         </motion.div>
       )}
 
-      {/* Sign Out */}
+      {/* Account */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
-        className="flex justify-center pt-2"
+        className="flex flex-col items-center gap-1 pt-2"
       >
+        <a
+          href="/settings"
+          className="flex items-center gap-2 text-sm text-muted hover:text-ink transition-colors py-2 px-4 rounded-lg min-h-[44px]"
+        >
+          <Settings className="w-4 h-4" />
+          Settings
+        </a>
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => {
+            window.location.href = "/sign-out";
+          }}
           className="flex items-center gap-2 text-sm text-muted hover:text-danger transition-colors py-2 px-4 rounded-lg min-h-[44px]"
         >
           <LogOut className="w-4 h-4" />

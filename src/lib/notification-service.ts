@@ -90,6 +90,9 @@ function getRecipients(
       return data.userId ? [data.userId as string] : [];
     case "member_joined":
       return getCardHolderIds(crewId);
+    case "card_holder_left":
+      // Notify the remaining crew members (the leaving card holder is the actor).
+      return getCrewMemberIds(crewId, actorId);
     default:
       return [];
   }
@@ -201,8 +204,10 @@ function resolveChannels(
 ): NotificationChannel[] {
   const prefs = getOrCreatePreferences(userId, crewId);
 
-  // Check if event is disabled
-  if (!prefs.eventPreferences[eventType]) return [];
+  // Treat a missing preference (e.g. an event type added after this row was
+  // created) as enabled; only an explicit false disables delivery. Without this
+  // a brand-new event type would be silently suppressed for existing users.
+  if (prefs.eventPreferences[eventType] === false) return [];
 
   const channels: NotificationChannel[] = [];
 

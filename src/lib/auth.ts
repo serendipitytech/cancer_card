@@ -1,94 +1,60 @@
-import NextAuth from "next-auth";
-import Credentials from "next-auth/providers/credentials";
-import { z } from "zod";
-import bcrypt from "bcryptjs";
+import { cache } from "react";
+import { getLogtoContext } from "@logto/next/server-actions";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { logtoConfig } from "@/lib/logto";
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-});
+/**
+ * App session, backed by Logto.
+ *
+ * The shape is intentionally kept compatible with the previous Auth.js `auth()`
+ * so the existing call sites (all read `session.user.id`) keep working without
+ * change. Logto owns identity now; we map the Logto `sub` to our own users row.
+ * See LOGTO-MIGRATION-PLAN.md.
+ */
+export type AppSession = {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    image: string | null;
+    logtoId: string;
+  };
+};
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: true,
-  providers: [
-    Credentials({
-      name: "credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials, request) {
-        const parsed = loginSchema.safeParse(credentials);
-        if (!parsed.success) {
-          return null;
-        }
+/**
+ * Resolve the current session from the Logto context, or null.
+ *
+ * Read-only and safe in Server Components, Route Handlers, and Server Actions.
+ * We only read identity claims (no resource/access-token refresh), so there is
+ * no cookie write on this path. Memoized per request via React cache() so the
+ * many call sites in a single render share one context read.
+ */
+export const auth = cache(async (): Promise<AppSession | null> => {
+  const { isAuthenticated, claims } = await getLogtoContext(logtoConfig);
 
-        const ip =
-          request?.headers instanceof Headers
-            ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
-            : "unknown";
-        const { allowed } = checkRateLimit("login", ip, {
-          windowMs: 15 * 60 * 1000,
-          maxRequests: 10,
-        });
-        if (!allowed) {
-          return null;
-        }
+  if (!isAuthenticated || !claims?.sub) {
+    return null;
+  }
 
-        const user = db
-          .select()
-          .from(users)
-          .where(eq(users.email, parsed.data.email.toLowerCase()))
-          .get();
+  const user = db
+    .select()
+    .from(users)
+    .where(eq(users.logtoId, claims.sub))
+    .get();
 
-        if (!user) {
-          return null;
-        }
+  if (!user) {
+    return null;
+  }
 
-        const passwordValid = await bcrypt.compare(
-          parsed.data.password,
-          user.passwordHash
-        );
-
-        if (!passwordValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.displayName,
-          image: user.avatarUrl,
-        };
-      },
-    }),
-  ],
-  session: {
-    strategy: "jwt",
-  },
-  pages: {
-    signIn: "/login",
-    newUser: "/signup",
-  },
-  callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        return { ...token, id: user.id };
-      }
-      return token;
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.displayName,
+      image: user.avatarUrl,
+      logtoId: claims.sub,
     },
-    session({ session, token }) {
-      return {
-        ...session,
-        user: {
-          ...session.user,
-          id: token.id as string,
-        },
-      };
-    },
-  },
+  };
 });

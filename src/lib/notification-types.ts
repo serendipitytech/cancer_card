@@ -12,6 +12,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   "milestone_logged",
   "badge_earned",
   "member_joined",
+  "card_holder_left",
 ] as const;
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
@@ -55,4 +56,5 @@ export const DEFAULT_EVENT_PREFERENCES: Record<NotificationEventType, boolean> =
     milestone_logged: true,
     badge_earned: true,
     member_joined: true,
+    card_holder_left: true,
   };

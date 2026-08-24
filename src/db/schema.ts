@@ -15,7 +15,13 @@ export const users = sqliteTable("users", {
     .$defaultFn(() => crypto.randomUUID()),
   displayName: text("display_name").notNull(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  // Nullable through the Logto cutover: Logto owns credentials now, so new
+  // users have no local password. Dropped in a follow-up migration once no
+  // code reads it. See LOGTO-MIGRATION-PLAN.md.
+  passwordHash: text("password_hash"),
+  // Logto user id (OIDC `sub`), populated on first authenticated login.
+  // Nullable during transition; the 9 existing users link by verified email.
+  logtoId: text("logto_id").unique(),
   avatarUrl: text("avatar_url"),
   hasSeenTour: integer("has_seen_tour", { mode: "boolean" })
     .notNull()

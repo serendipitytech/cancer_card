@@ -154,6 +154,11 @@ export function getNotificationTemplate(
         title: "New Crew Member",
         body: `${actorName} joined the crew! Time to put them to work.`,
       };
+    case "card_holder_left":
+      return {
+        title: "A Card Holder has closed their account",
+        body: "Someone you supported has closed their Cancer Card account, and their personal information has been removed. You're welcome to keep your account, or you can close yours too from Settings.",
+      };
     default:
       return null;
   }

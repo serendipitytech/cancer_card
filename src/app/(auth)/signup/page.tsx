@@ -1,145 +1,43 @@
-"use client";
-
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { SuitIcon } from "@/components/cards/suit-icon";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
+/**
+ * Signup landing page. Account creation itself happens on Logto's hosted
+ * sign-in experience (same /sign-in redirect as login; Logto's flow offers
+ * both sign-in and registration).
+ */
 export default function SignupPage() {
-  const router = useRouter();
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErrors({});
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, email, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErrors({ form: data.error });
-        setLoading(false);
-        return;
-      }
-
-      const result = await signIn("credentials", {
-        email: email.toLowerCase(),
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setErrors({ form: "Account created but couldn't sign in. Try logging in." });
-        setLoading(false);
-        return;
-      }
-
-      router.push("/dashboard");
-      router.refresh();
-    } catch {
-      setErrors({ form: "Something went sideways. Please try again." });
-      setLoading(false);
-    }
-  }
-
   return (
-    <div className="animate-card-deal max-w-sm mx-auto">
-      {/* Logo */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-royal to-blush mb-4">
-          <SuitIcon suit="heart" size="lg" className="text-white" />
+    <div className="w-full max-w-sm mx-auto space-y-6">
+      <div className="text-center space-y-2">
+        <div className="flex justify-center gap-1 mb-3">
+          <SuitIcon suit="diamond" size="lg" className="text-royal" />
+          <SuitIcon suit="club" size="lg" className="text-blush" />
         </div>
-        <h1 className="font-heading font-extrabold text-3xl text-midnight">
-          Join the Game
+        <h1 className="font-heading font-extrabold text-2xl text-midnight">
+          Create your account
         </h1>
-        <p className="text-muted mt-1 text-sm">
-          Create your account to play your cancer card
+      </div>
+
+      <Card variant="accent" padding="lg" className="space-y-3">
+        <p className="text-sm text-ink leading-relaxed">
+          We will ask for your email, then send you a secure sign-in link so
+          you can get started right away. You can add a password afterward if
+          you would rather use one next time.
         </p>
-      </div>
+      </Card>
 
-      {/* Form */}
-      <div className="bg-surface rounded-card shadow-raised p-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Your Name"
-            type="text"
-            placeholder="How should we call you?"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            required
-            autoComplete="name"
-          />
+      <a href="/sign-in">
+        <Button variant="primary" size="lg" className="w-full">
+          Continue
+        </Button>
+      </a>
 
-          <Input
-            label="Email"
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
-
-          <Input
-            label="Password"
-            type="password"
-            placeholder="8+ characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="new-password"
-            minLength={8}
-          />
-
-          {errors.form && (
-            <p className="text-sm text-danger bg-danger-light px-3 py-2 rounded-lg">
-              {errors.form}
-            </p>
-          )}
-
-          <Button
-            type="submit"
-            loading={loading}
-            className="w-full"
-            size="lg"
-          >
-            Create Account
-          </Button>
-        </form>
-      </div>
-
-      {/* Quick start guide link */}
-      <p className="text-center text-sm text-muted mt-6">
-        New here?{" "}
-        <Link
-          href="/quickstart"
-          className="text-royal font-semibold hover:underline min-h-0 min-w-0"
-        >
-          Read the Quick Start Guide
-        </Link>
-      </p>
-
-      {/* Login link */}
-      <p className="text-center text-sm text-muted mt-2">
+      <p className="text-center text-sm text-muted">
         Already have an account?{" "}
-        <Link
-          href="/login"
-          className="text-royal font-semibold hover:underline min-h-0 min-w-0"
-        >
+        <Link href="/login" className="text-royal font-semibold">
           Sign in
         </Link>
       </p>
