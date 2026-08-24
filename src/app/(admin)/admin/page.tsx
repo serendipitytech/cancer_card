@@ -1,12 +1,15 @@
 import { getOverviewStats, getGlobalActivity } from "@/lib/admin-queries";
+import { requireAdmin } from "@/lib/require-admin";
 import { StatCard } from "@/components/admin/stat-card";
 import { Card } from "@/components/ui/card";
 import { EVENT_EMOJIS } from "@/lib/event-emojis";
 import { timeAgo } from "@/lib/utils";
 
-export default function AdminOverviewPage() {
-  const stats = getOverviewStats();
-  const recentActivity = getGlobalActivity(10);
+export default async function AdminOverviewPage() {
+  await requireAdmin();
+
+  const stats = await getOverviewStats();
+  const recentActivity = await getGlobalActivity(10);
 
   return (
     <div>

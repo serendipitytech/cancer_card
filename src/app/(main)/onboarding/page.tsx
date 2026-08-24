@@ -5,7 +5,7 @@ import { OnboardingClient } from "./onboarding-client";
 
 export default async function OnboardingPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  if (!session?.user?.id) redirect("/sign-in");
 
   const existingCrews = getUserCrews(session.user.id);
   const isAdditional = existingCrews.length > 0;

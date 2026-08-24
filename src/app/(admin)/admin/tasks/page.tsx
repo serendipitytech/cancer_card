@@ -1,9 +1,12 @@
 import { getAllTasks, getCrewsForFilter } from "@/lib/admin-queries";
+import { requireAdmin } from "@/lib/require-admin";
 import { TasksClient } from "./tasks-client";
 
-export default function AdminTasksPage() {
-  const tasks = getAllTasks();
-  const crewOptions = getCrewsForFilter();
+export default async function AdminTasksPage() {
+  await requireAdmin();
+
+  const tasks = await getAllTasks();
+  const crewOptions = await getCrewsForFilter();
 
   return <TasksClient tasks={tasks} crewOptions={crewOptions} />;
 }

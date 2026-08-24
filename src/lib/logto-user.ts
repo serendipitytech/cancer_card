@@ -14,10 +14,14 @@ import { logtoConfig } from "@/lib/logto";
  *  - Otherwise: create a new app user row (password_hash stays null, Logto owns
  *    credentials now).
  *
- * Security: we only link to an existing account when the Logto email is
- * verified. An unverified email that collides with an existing account is
- * refused, so a fresh Logto signup cannot claim someone else's crew data by
- * typing their address.
+ * Security: ALL email-based provisioning, both linking to an existing row
+ * and creating a new one, requires a verified email. An unverified email
+ * that collides with an existing account is refused, so a fresh Logto
+ * signup cannot claim someone else's crew data by typing their address.
+ * An unverified email is also refused on the create path, so no one can
+ * stand up a brand-new account (and later claim it, or have someone
+ * impersonate them by pre-registering their address) before ever proving
+ * they own that inbox.
  */
 export async function provisionAppUser(): Promise<void> {
   const { isAuthenticated, claims, userInfo } = await getLogtoContext(logtoConfig, {
@@ -41,24 +45,29 @@ export async function provisionAppUser(): Promise<void> {
   const displayName = userInfo?.name ?? claims.name ?? email ?? "New member";
   const avatar = userInfo?.picture ?? claims.picture ?? null;
 
-  if (email) {
-    const existingByEmail = db.select().from(users).where(eq(users.email, email)).get();
-    if (existingByEmail) {
-      if (!emailVerified) {
-        throw new Error(
-          "Email is not verified; cannot link to the existing Cancer Card account for this address"
-        );
-      }
-      db.update(users)
-        .set({ logtoId, avatarUrl: existingByEmail.avatarUrl ?? avatar })
-        .where(eq(users.id, existingByEmail.id))
-        .run();
-      return;
-    }
-  }
-
   if (!email) {
     throw new Error("Logto session has no email; cannot provision a Cancer Card user");
+  }
+
+  // Verified email is required for ANY email-based provisioning below, both
+  // linking to an existing row and creating a new one. Refusing here (before
+  // either branch) closes both the account-takeover vector (claiming an
+  // existing user's row) and the impersonation/pre-claim-poisoning vector
+  // (standing up a new row under an address the caller hasn't proven they
+  // own).
+  if (!emailVerified) {
+    throw new Error(
+      "Email is not verified; cannot provision a Cancer Card account for this address"
+    );
+  }
+
+  const existingByEmail = db.select().from(users).where(eq(users.email, email)).get();
+  if (existingByEmail) {
+    db.update(users)
+      .set({ logtoId, avatarUrl: existingByEmail.avatarUrl ?? avatar })
+      .where(eq(users.id, existingByEmail.id))
+      .run();
+    return;
   }
 
   db.insert(users)

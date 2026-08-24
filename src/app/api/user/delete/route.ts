@@ -6,6 +6,7 @@ import { requireSession, getUserCrews } from "@/lib/session";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { deleteLogtoUser } from "@/lib/logto-mgmt";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { alertOps } from "@/lib/ops-alert";
 
 /**
  * POST /api/user/delete — close the current user's account.
@@ -17,8 +18,14 @@ import { checkRateLimit } from "@/lib/rate-limit";
  * identity is removed from Logto.
  */
 export async function POST() {
+  let session;
   try {
-    const session = await requireSession();
+    session = await requireSession();
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
     const userId = session.user.id;
     const logtoId = session.user.logtoId;
 
@@ -33,12 +40,11 @@ export async function POST() {
       );
     }
 
-    // Notify crews where this user is the Card Holder, before anonymizing.
-    for (const crew of getUserCrews(userId)) {
-      if (crew.cardHolderId === userId) {
-        notifyOnEvent(crew.crewId, "card_holder_left", userId, {});
-      }
-    }
+    // Snapshot which crews need notifying BEFORE anonymizing (once the row
+    // is scrubbed we can no longer tell which crews this user card-held).
+    const crewsToNotify = getUserCrews(userId).filter(
+      (crew) => crew.cardHolderId === userId
+    );
 
     // Anonymize: scrub PII, keep the row so shared history survives. The unique
     // placeholder email satisfies the NOT NULL + UNIQUE constraints; userId is
@@ -54,13 +60,29 @@ export async function POST() {
       .where(eq(users.id, userId))
       .run();
 
+    // Notify crews only AFTER the anonymize above is confirmed committed, so
+    // a crew never gets a "card holder left" notice for a deletion that
+    // didn't actually happen (e.g. the DB write above throwing).
+    for (const crew of crewsToNotify) {
+      notifyOnEvent(crew.crewId, "card_holder_left", userId, {});
+    }
+
     // Remove the identity from Logto. Best-effort: the app row is already
-    // anonymized, so a Logto hiccup should not fail the user's request.
+    // anonymized, so a Logto hiccup should not fail the user's request. But a
+    // silent failure here leaves a real email address live at Logto after the
+    // user asked us to delete their account, so it needs a human to follow up
+    // on, not just a log line.
     if (logtoId) {
       try {
         await deleteLogtoUser(logtoId);
       } catch (err) {
-        console.error("Logto user deletion failed (app row already anonymized):", err);
+        console.error(
+          `Logto user deletion failed for logtoId=${logtoId} (app row already anonymized; orphaned PII remains at Logto):`,
+          err
+        );
+        await alertOps(
+          `Cancer Card: Logto account deletion failed for logtoId ${logtoId} after the app row was anonymized. The real email is still live at Logto and needs manual cleanup.`
+        );
       }
     }
 

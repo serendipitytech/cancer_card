@@ -1,4 +1,5 @@
 import { getAllCrews, type AdminCrew } from "@/lib/admin-queries";
+import { requireAdmin } from "@/lib/require-admin";
 import { DataTable, type Column } from "@/components/admin/data-table";
 import { Badge } from "@/components/ui/badge";
 import { formatPoints, timeAgo } from "@/lib/utils";
@@ -59,8 +60,10 @@ const columns: Column<AdminCrew>[] = [
   },
 ];
 
-export default function AdminCrewsPage() {
-  const crews = getAllCrews();
+export default async function AdminCrewsPage() {
+  await requireAdmin();
+
+  const crews = await getAllCrews();
 
   return (
     <div>

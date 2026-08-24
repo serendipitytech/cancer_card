@@ -1,4 +1,5 @@
 import { getAllUsers, type AdminUser } from "@/lib/admin-queries";
+import { requireAdmin } from "@/lib/require-admin";
 import { DataTable, type Column } from "@/components/admin/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -36,8 +37,10 @@ const columns: Column<AdminUser>[] = [
   },
 ];
 
-export default function AdminUsersPage() {
-  const users = getAllUsers();
+export default async function AdminUsersPage() {
+  await requireAdmin();
+
+  const users = await getAllUsers();
 
   return (
     <div>

@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/db";
 import { users, crews, tasks, milestones, activityFeed } from "@/db/schema";
 import { sql, desc, and, type SQL } from "drizzle-orm";
+import { requireAdmin } from "@/lib/require-admin";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,9 @@ type OverviewStats = {
   recentTasks: number;
 };
 
-export function getOverviewStats(): OverviewStats {
+export async function getOverviewStats(): Promise<OverviewStats> {
+  await requireAdmin();
+
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
 
   const rows = db.all<{
@@ -74,7 +77,9 @@ export type AdminUser = {
   createdAt: Date;
 };
 
-export function getAllUsers(): AdminUser[] {
+export async function getAllUsers(): Promise<AdminUser[]> {
+  await requireAdmin();
+
   const rows = db
     .select({
       id: users.id,
@@ -109,7 +114,9 @@ export type AdminCrew = {
   createdAt: Date;
 };
 
-export function getAllCrews(): AdminCrew[] {
+export async function getAllCrews(): Promise<AdminCrew[]> {
+  await requireAdmin();
+
   const rows = db
     .select({
       id: crews.id,
@@ -159,7 +166,9 @@ type TaskFilters = {
   crewId?: string;
 };
 
-export function getAllTasks(filters?: TaskFilters): AdminTask[] {
+export async function getAllTasks(filters?: TaskFilters): Promise<AdminTask[]> {
+  await requireAdmin();
+
   const conditions: SQL[] = [];
 
   if (filters?.status) {
@@ -231,7 +240,9 @@ export type AdminActivity = {
   createdAt: Date;
 };
 
-export function getGlobalActivity(limit: number): AdminActivity[] {
+export async function getGlobalActivity(limit: number): Promise<AdminActivity[]> {
+  await requireAdmin();
+
   const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 500);
 
   const rows = db.all<{
@@ -273,7 +284,9 @@ export type CrewOption = {
   name: string;
 };
 
-export function getCrewsForFilter(): CrewOption[] {
+export async function getCrewsForFilter(): Promise<CrewOption[]> {
+  await requireAdmin();
+
   return db
     .select({ id: crews.id, name: crews.name })
     .from(crews)

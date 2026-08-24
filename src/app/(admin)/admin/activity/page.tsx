@@ -1,4 +1,5 @@
 import { getGlobalActivity } from "@/lib/admin-queries";
+import { requireAdmin } from "@/lib/require-admin";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EVENT_EMOJIS } from "@/lib/event-emojis";
@@ -30,8 +31,10 @@ function getEventDescription(
   }
 }
 
-export default function AdminActivityPage() {
-  const activity = getGlobalActivity(100);
+export default async function AdminActivityPage() {
+  await requireAdmin();
+
+  const activity = await getGlobalActivity(100);
 
   return (
     <div>

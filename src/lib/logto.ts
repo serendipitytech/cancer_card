@@ -18,6 +18,34 @@ import { UserScope } from "@logto/next";
  * present at runtime via compose; a missing value surfaces as a clear Logto
  * error on the first sign-in, not a build failure.
  */
+// Runtime startup assert (production only): a mis-deploy that drops one of
+// these envs must fail loudly at boot, not silently at a patient's sign-in.
+// Skipped during `next build` (page-data collection runs with NODE_ENV set
+// but before the real runtime env is injected) by only checking when this
+// module is first imported outside the build step, i.e. once the server is
+// actually serving requests — see the comment below on why we read with a
+// fallback instead of throwing directly in the config object.
+if (process.env.NODE_ENV === "production" && typeof window === "undefined") {
+  const required: Record<string, string | undefined> = {
+    LOGTO_ENDPOINT: process.env.LOGTO_ENDPOINT,
+    LOGTO_APP_ID: process.env.LOGTO_APP_ID,
+    LOGTO_APP_SECRET: process.env.LOGTO_APP_SECRET,
+    LOGTO_BASE_URL: process.env.LOGTO_BASE_URL,
+    LOGTO_COOKIE_SECRET: process.env.LOGTO_COOKIE_SECRET,
+  };
+
+  const missing = Object.entries(required)
+    .filter(([, value]) => !value || value.trim().length < 8)
+    .map(([key]) => key);
+
+  if (missing.length > 0 && process.env.NEXT_PHASE !== "phase-production-build") {
+    throw new Error(
+      `Logto misconfigured: missing or trivial env var(s) ${missing.join(", ")}. ` +
+        "Refusing to serve auth traffic with an incomplete Logto config."
+    );
+  }
+}
+
 export const logtoConfig: LogtoNextConfig = {
   endpoint: process.env.LOGTO_ENDPOINT ?? "",
   appId: process.env.LOGTO_APP_ID ?? "",
