@@ -165,6 +165,9 @@ export async function POST(
       taskId,
       taskTitle: result.data?.title || "a task",
       actorName: session.user.name || "Someone",
+      // Lets task_cancelled reach whoever was on the hook for the task.
+      assignedTo: result.data?.assignedTo ?? undefined,
+      claimedBy: result.data?.claimedBy ?? undefined,
     });
 
     return NextResponse.json(result.data);

@@ -7,6 +7,7 @@ import { placeBidSchema, uuidParamSchema } from "@/lib/validators";
 import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { closeAuctionWithBid, getLowestBid } from "@/lib/auction-close";
 
 type AuctionSettings = {
   endsAt?: string;
@@ -63,39 +64,12 @@ export async function POST(
 
     const settings = task.auctionSettings as AuctionSettings;
     if (settings?.endsAt && new Date(settings.endsAt) < new Date()) {
-      // Auction has expired - auto-close it by awarding to lowest bidder
-      const lowestBid = db
-        .select()
-        .from(bids)
-        .where(eq(bids.taskId, taskId))
-        .orderBy(bids.bidAmount)
-        .limit(1)
-        .get();
-
-      if (lowestBid) {
-        db.update(tasks)
-          .set({
-            status: "claimed",
-            claimedBy: lowestBid.userId,
-            finalPointCost: lowestBid.bidAmount,
-          })
-          .where(eq(tasks.id, taskId))
-          .run();
-
-        logActivity(task.crewId, "auction_won", lowestBid.userId, {
-          taskId: task.id,
-          taskTitle: task.title,
-          winningBid: lowestBid.bidAmount,
-        });
-
-        notifyOnEvent(task.crewId, "auction_won", lowestBid.userId, {
-          taskId: task.id,
-          taskTitle: task.title,
-          winningBid: lowestBid.bidAmount,
-          winnerId: lowestBid.userId,
-          actorName: "System",
-        });
-      }
+      // Auction has expired - auto-close it by awarding to the lowest bidder.
+      const lowestBid = getLowestBid(taskId);
+      closeAuctionWithBid(task, lowestBid, {
+        actorId: lowestBid?.userId ?? session.user.id,
+        actorName: "System",
+      });
 
       return NextResponse.json(
         { error: "This auction has ended" },
@@ -175,41 +149,7 @@ export async function POST(
         .where(eq(bids.taskId, taskId))
         .get()!;
 
-      const autoClose = settings?.autoCloseAfterBids;
-      let auctionClosed = false;
-      let winnerUserId: string | null = null;
-      let winnerBidAmount: number | null = null;
-
-      if (autoClose && totalBids >= autoClose) {
-        const winningBid = tx
-          .select()
-          .from(bids)
-          .where(eq(bids.taskId, taskId))
-          .orderBy(bids.bidAmount)
-          .limit(1)
-          .get();
-
-        if (winningBid) {
-          const updated = tx
-            .update(tasks)
-            .set({
-              status: "claimed",
-              claimedBy: winningBid.userId,
-              finalPointCost: winningBid.bidAmount,
-            })
-            .where(and(eq(tasks.id, taskId), eq(tasks.status, "pending")))
-            .returning()
-            .get();
-
-          if (updated) {
-            auctionClosed = true;
-            winnerUserId = winningBid.userId;
-            winnerBidAmount = winningBid.bidAmount;
-          }
-        }
-      }
-
-      return { bid, auctionClosed, winnerUserId, winnerBidAmount };
+      return { bid, totalBids };
     });
 
     logActivity(task.crewId, "bid_placed", session.user.id, {
@@ -226,18 +166,12 @@ export async function POST(
       actorName: session.user.name || "Someone",
     });
 
-    if (bidResult.auctionClosed && bidResult.winnerUserId) {
-      logActivity(task.crewId, "auction_won", bidResult.winnerUserId, {
-        taskId: task.id,
-        taskTitle: task.title,
-        winningBid: bidResult.winnerBidAmount,
-      });
-
-      notifyOnEvent(task.crewId, "auction_won", bidResult.winnerUserId, {
-        taskId: task.id,
-        taskTitle: task.title,
-        winningBid: bidResult.winnerBidAmount,
-        winnerId: bidResult.winnerUserId,
+    // Bid-threshold auto-close routes through the same shared helper as the
+    // expiry and manual closes, so there is exactly one auto-close code path.
+    const autoClose = settings?.autoCloseAfterBids;
+    if (autoClose && bidResult.totalBids >= autoClose) {
+      closeAuctionWithBid(task, getLowestBid(taskId), {
+        actorId: session.user.id,
         actorName: session.user.name || "Someone",
       });
     }

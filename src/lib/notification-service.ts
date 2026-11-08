@@ -78,6 +78,10 @@ function getRecipients(
   switch (eventType) {
     case "task_created":
       return getTaskCreatedRecipients(crewId, actorId, data);
+    case "task_assigned":
+      return getTaskAssignedRecipients(actorId, data);
+    case "task_cancelled":
+      return getTaskCancelledRecipients(actorId, data);
     case "task_claimed":
     case "task_completed":
     case "bid_placed":
@@ -111,6 +115,30 @@ function getTaskCreatedRecipients(
 
   // open or auction — notify all crew members (not the card holder)
   return getCrewMemberIds(crewId, actorId);
+}
+
+// Direct assignment: notify the assignee (never the actor who assigned it).
+function getTaskAssignedRecipients(
+  actorId: string,
+  data: EventData
+): string[] {
+  const assignedTo = data.assignedTo as string | undefined;
+  if (!assignedTo || assignedTo === actorId) return [];
+  return [assignedTo];
+}
+
+// Cancellation: notify whoever was on the hook for the task (the person who
+// claimed it, else the person it was assigned to), excluding the actor. An
+// open/unclaimed task that nobody owned notifies no one.
+function getTaskCancelledRecipients(
+  actorId: string,
+  data: EventData
+): string[] {
+  const owner =
+    (data.claimedBy as string | undefined) ||
+    (data.assignedTo as string | undefined);
+  if (!owner || owner === actorId) return [];
+  return [owner];
 }
 
 function getAuctionWonRecipients(

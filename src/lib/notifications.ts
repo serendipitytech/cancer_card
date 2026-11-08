@@ -51,6 +51,26 @@ export function getTaskCompletedNotification(
   };
 }
 
+export function getTaskAssignedNotification(
+  cardHolderName: string,
+  taskTitle: string
+): NotificationTemplate {
+  return {
+    title: "You've Got a Task",
+    body: `${cardHolderName} assigned you "${taskTitle}". You're on deck.`,
+  };
+}
+
+export function getTaskCancelledNotification(
+  actorName: string,
+  taskTitle: string
+): NotificationTemplate {
+  return {
+    title: "Task Cancelled",
+    body: `"${taskTitle}" was cancelled by ${actorName}. No action needed.`,
+  };
+}
+
 export function getAuctionWonNotification(
   winnerName: string,
   taskTitle: string,
@@ -126,6 +146,10 @@ export function getNotificationTemplate(
       return getTaskClaimedNotification(actorName, taskTitle);
     case "task_completed":
       return getTaskCompletedNotification(actorName, taskTitle);
+    case "task_assigned":
+      return getTaskAssignedNotification(actorName, taskTitle);
+    case "task_cancelled":
+      return getTaskCancelledNotification(actorName, taskTitle);
     case "bid_placed":
       return {
         title: "New Bid",

@@ -5,8 +5,7 @@ import { tasks, bids, crewMembers } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { uuidParamSchema } from "@/lib/validators";
-import { logActivity } from "@/lib/points";
-import { notifyOnEvent } from "@/lib/notification-service";
+import { closeAuctionWithBid, getLowestBid } from "@/lib/auction-close";
 
 const closeAuctionSchema = z.object({
   action: z.enum(["auto", "select"]),
@@ -82,13 +81,7 @@ export async function POST(
 
     if (parsed.data.action === "auto") {
       // Award to lowest bidder
-      winningBid = db
-        .select()
-        .from(bids)
-        .where(eq(bids.taskId, taskId))
-        .orderBy(bids.bidAmount)
-        .limit(1)
-        .get();
+      winningBid = getLowestBid(taskId);
     } else if (parsed.data.action === "select") {
       // Award to specific bid
       if (!parsed.data.bidId) {
@@ -121,35 +114,27 @@ export async function POST(
       );
     }
 
-    // Update task status
-    const updatedTask = db
-      .update(tasks)
-      .set({
-        status: "claimed",
-        claimedBy: winningBid.userId,
-        finalPointCost: winningBid.bidAmount,
-      })
-      .where(eq(tasks.id, taskId))
-      .returning()
-      .get();
-
-    // Log activity
-    logActivity(task.crewId, "auction_won", winningBid.userId, {
-      taskId: task.id,
-      taskTitle: task.title,
-      winningBid: winningBid.bidAmount,
-      closedBy: session.user.id,
-      closedManually: true,
-    });
-
-    // Notify winner
-    notifyOnEvent(task.crewId, "auction_won", winningBid.userId, {
-      taskId: task.id,
-      taskTitle: task.title,
-      winningBid: winningBid.bidAmount,
-      winnerId: winningBid.userId,
+    // Award + close through the shared auto-close helper (same path as the
+    // expiry and bid-threshold closes). The status guard inside the helper
+    // makes a manual close safe even if an expiry close already fired.
+    const result = closeAuctionWithBid(task, winningBid, {
+      actorId: session.user.id,
       actorName: session.user.name || "Card Holder",
+      logData: { closedBy: session.user.id, closedManually: true },
     });
+
+    if (!result.closed) {
+      return NextResponse.json(
+        { error: "This auction is no longer active" },
+        { status: 409 }
+      );
+    }
+
+    const updatedTask = db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .get();
 
     return NextResponse.json({
       success: true,

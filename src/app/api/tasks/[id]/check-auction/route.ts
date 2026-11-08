@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { tasks, bids } from "@/db/schema";
+import { tasks } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { uuidParamSchema } from "@/lib/validators";
-import { logActivity } from "@/lib/points";
-import { notifyOnEvent } from "@/lib/notification-service";
+import { closeAuctionWithBid, getLowestBid } from "@/lib/auction-close";
 
 type AuctionSettings = {
   endsAt?: string;
@@ -47,48 +46,23 @@ export async function GET(
     const endsAt = settings?.endsAt ? new Date(settings.endsAt) : null;
     const isExpired = endsAt && endsAt < now;
 
-    // If expired and still pending, auto-close it
+    // If expired and still pending, auto-close it through the shared helper.
     if (isExpired && task.status === "pending") {
-      const lowestBid = db
-        .select()
-        .from(bids)
-        .where(eq(bids.taskId, taskId))
-        .orderBy(bids.bidAmount)
-        .limit(1)
-        .get();
+      const lowestBid = getLowestBid(taskId);
+      const result = closeAuctionWithBid(task, lowestBid, {
+        actorId: lowestBid?.userId ?? session.user.id,
+        actorName: "System",
+        logData: { autoClosedOnExpiry: true },
+      });
 
-      if (lowestBid) {
-        db.update(tasks)
-          .set({
-            status: "claimed",
-            claimedBy: lowestBid.userId,
-            finalPointCost: lowestBid.bidAmount,
-          })
-          .where(eq(tasks.id, taskId))
-          .run();
-
-        logActivity(task.crewId, "auction_won", lowestBid.userId, {
-          taskId: task.id,
-          taskTitle: task.title,
-          winningBid: lowestBid.bidAmount,
-          autoClosedOnExpiry: true,
-        });
-
-        notifyOnEvent(task.crewId, "auction_won", lowestBid.userId, {
-          taskId: task.id,
-          taskTitle: task.title,
-          winningBid: lowestBid.bidAmount,
-          winnerId: lowestBid.userId,
-          actorName: "System",
-        });
-
+      if (result.closed) {
         return NextResponse.json({
           status: "closed",
           expired: true,
           endsAt: endsAt?.toISOString(),
           winner: {
-            userId: lowestBid.userId,
-            bidAmount: lowestBid.bidAmount,
+            userId: result.winnerId,
+            bidAmount: result.winningBid,
           },
         });
       }
