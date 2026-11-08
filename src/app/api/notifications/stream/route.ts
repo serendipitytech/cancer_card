@@ -4,7 +4,10 @@ import { notificationLog } from "@/db/schema";
 import { eq, desc, gte, and } from "drizzle-orm";
 import { getUserActiveCrew } from "@/lib/session";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { getUnreadCount } from "@/lib/notification-queries";
+import {
+  getUnreadCount,
+  hydrateNotifications,
+} from "@/lib/notification-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +79,8 @@ export async function GET() {
             .all();
 
           if (newEntries.length > 0) {
-            for (const entry of newEntries) {
+            // Resolve the actor name at read time (names are never stored).
+            for (const entry of hydrateNotifications(newEntries)) {
               sendEvent({ type: "notification", entry });
             }
             const maxCreatedAt = newEntries.reduce(

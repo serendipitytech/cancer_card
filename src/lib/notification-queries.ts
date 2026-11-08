@@ -3,6 +3,7 @@ import {
   notificationPreferences,
   notificationLog,
   pushTokens,
+  users,
 } from "@/db/schema";
 import type {
   ChannelPreferences,
@@ -11,6 +12,8 @@ import type {
   DigestSettings,
 } from "@/db/schema";
 import { eq, and, inArray, sql, desc, ne } from "drizzle-orm";
+import { renderActorText } from "@/lib/notifications";
+import { ANONYMIZED_DISPLAY_NAME } from "@/lib/account-deletion";
 import {
   DEFAULT_CHANNEL_PREFERENCES,
   DEFAULT_EVENT_PREFERENCES,
@@ -97,6 +100,52 @@ export function updatePreferences(
     .get();
 }
 
+// ─── Read-time name rendering ────────────────────────────────────────────────
+
+type RenderableRow = {
+  title: string;
+  body: string;
+  data: Record<string, unknown> | null;
+};
+
+/**
+ * Resolve the ACTOR_PLACEHOLDER in stored notification text to the actor's
+ * CURRENT display name. Names are never frozen into the log; the row stores
+ * `data.actorId`, and this is where the live name is stitched in at read time,
+ * so a closed account shows "A former member" without any row rewrite.
+ */
+export function hydrateNotifications<T extends RenderableRow>(rows: T[]): T[] {
+  const actorIds = Array.from(
+    new Set(
+      rows
+        .map((r) => (r.data?.actorId as string | undefined) ?? null)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+
+  const nameById = new Map<string, string>();
+  if (actorIds.length > 0) {
+    const actors = db
+      .select({
+        id: users.id,
+        displayName: users.displayName,
+        deletedAt: users.deletedAt,
+      })
+      .from(users)
+      .where(inArray(users.id, actorIds))
+      .all();
+    for (const a of actors) {
+      nameById.set(a.id, a.deletedAt ? ANONYMIZED_DISPLAY_NAME : a.displayName);
+    }
+  }
+
+  return rows.map((row) => {
+    const actorId = row.data?.actorId as string | undefined;
+    const name = (actorId && nameById.get(actorId)) || "Someone";
+    return { ...row, title: renderActorText(row.title, name), body: renderActorText(row.body, name) };
+  });
+}
+
 // ─── Notification Log Queries ───────────────────────────────────────────────
 
 export function getUnreadCount(userId: string, crewId: string): number {
@@ -137,7 +186,7 @@ export function getUserNotifications(
     conditions.push(eq(notificationLog.status, status));
   }
 
-  return db
+  const rows = db
     .select()
     .from(notificationLog)
     .where(and(...conditions))
@@ -145,6 +194,8 @@ export function getUserNotifications(
     .limit(limit)
     .offset(offset)
     .all();
+
+  return hydrateNotifications(rows);
 }
 
 export function getNotificationTotal(

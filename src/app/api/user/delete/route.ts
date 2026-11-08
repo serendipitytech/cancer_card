@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { requireSession, getUserCrews } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { notifyOnEvent } from "@/lib/notification-service";
+import { anonymizeUserData } from "@/lib/account-deletion";
 import { deleteLogtoUser } from "@/lib/logto-mgmt";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { alertOps } from "@/lib/ops-alert";
@@ -40,31 +38,17 @@ export async function POST() {
       );
     }
 
-    // Snapshot which crews need notifying BEFORE anonymizing (once the row
-    // is scrubbed we can no longer tell which crews this user card-held).
-    const crewsToNotify = getUserCrews(userId).filter(
-      (crew) => crew.cardHolderId === userId
-    );
+    // Anonymize + scrub every name/PII/free-text surface in one transaction.
+    // Returns the crews this user card-held (snapshotted before the scrub) so
+    // we can notify them. If the transaction throws, nothing is committed and
+    // no notification fires below.
+    const { cardHeldCrewIds } = anonymizeUserData(userId);
 
-    // Anonymize: scrub PII, keep the row so shared history survives. The unique
-    // placeholder email satisfies the NOT NULL + UNIQUE constraints; userId is
-    // an internal identifier, not personal data.
-    db.update(users)
-      .set({
-        displayName: "A former member",
-        email: `deleted-${userId}@deleted.invalid`,
-        avatarUrl: null,
-        logtoId: null,
-        passwordHash: null,
-      })
-      .where(eq(users.id, userId))
-      .run();
-
-    // Notify crews only AFTER the anonymize above is confirmed committed, so
-    // a crew never gets a "card holder left" notice for a deletion that
-    // didn't actually happen (e.g. the DB write above throwing).
-    for (const crew of crewsToNotify) {
-      notifyOnEvent(crew.crewId, "card_holder_left", userId, {});
+    // Notify the affected crews only AFTER the anonymize transaction is
+    // committed, so a crew never gets a "card holder left" notice for a
+    // deletion that didn't actually happen.
+    for (const crewId of cardHeldCrewIds) {
+      notifyOnEvent(crewId, "card_holder_left", userId, {});
     }
 
     // Remove the identity from Logto. Best-effort: the app row is already

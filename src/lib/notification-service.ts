@@ -1,15 +1,46 @@
 import { db } from "@/db";
 import { crewMembers, crews, users } from "@/db/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, isNull } from "drizzle-orm";
 import type { NotificationEventType, NotificationChannel } from "@/lib/notification-types";
 import {
   getOrCreatePreferences,
   insertNotificationBatch,
 } from "@/lib/notification-queries";
-import { getNotificationTemplate } from "@/lib/notifications";
+import {
+  getNotificationTemplate,
+  renderActorText,
+} from "@/lib/notifications";
+import { ANONYMIZED_DISPLAY_NAME } from "@/lib/account-deletion";
 import { sendNotificationEmail } from "@/lib/notification-email";
 
 type EventData = Record<string, unknown>;
+
+/**
+ * Resolve the actor's CURRENT display name. Names are never frozen into the
+ * notification log; we store `actorId` and look the name up at send/read time,
+ * so a closed account renders as a former member everywhere.
+ */
+function resolveActorName(actorId: string): string {
+  const actor = db
+    .select({ displayName: users.displayName, deletedAt: users.deletedAt })
+    .from(users)
+    .where(eq(users.id, actorId))
+    .get();
+
+  if (!actor) return "Someone";
+  if (actor.deletedAt) return ANONYMIZED_DISPLAY_NAME;
+  return actor.displayName || "Someone";
+}
+
+/**
+ * Strip any denormalized name off the event payload and pin the actor's id, so
+ * the persisted `data` blob carries references, not a person's name.
+ */
+function buildStoredData(actorId: string, data: EventData): EventData {
+  const rest = { ...data };
+  delete rest.actorName;
+  return { ...rest, actorId };
+}
 
 // ─── Entry Point (fire-and-forget) ──────────────────────────────────────────
 
@@ -34,8 +65,15 @@ async function processEvent(
   const recipientIds = getRecipients(crewId, eventType, actorId, data);
   if (recipientIds.length === 0) return;
 
+  // Template text carries the ACTOR_PLACEHOLDER token, never a real name.
   const template = getNotificationTemplate(eventType, data);
   if (!template) return;
+
+  // What we persist: the placeholdered template + a payload that references the
+  // actor by id with no denormalized name. The live name is resolved only for
+  // the transient email send below.
+  const storedData = buildStoredData(actorId, data);
+  const actorName = resolveActorName(actorId);
 
   // Filter recipients by their preferences for in-app delivery
   const inAppRecipients = recipientIds.filter((userId) => {
@@ -51,7 +89,7 @@ async function processEvent(
       channel: "in_app" as NotificationChannel,
       title: template.title,
       body: template.body,
-      data,
+      data: storedData,
       status: "sent" as const,
       sentAt: new Date(),
     }));
@@ -62,7 +100,14 @@ async function processEvent(
   // Process email for each recipient (async, non-blocking)
   await Promise.all(
     recipientIds.map((userId) =>
-      processEmailForUser(userId, crewId, eventType, template, data)
+      processEmailForUser(
+        userId,
+        crewId,
+        eventType,
+        template,
+        storedData,
+        actorName
+      )
     )
   );
 }
@@ -128,24 +173,29 @@ function getAuctionWonRecipients(
 }
 
 function getCardHolderIds(crewId: string): string[] {
-  const crew = db
+  // Join users and skip a closed (anonymized) card holder: routing must never
+  // target an account that can no longer sign in to read it.
+  const rows = db
     .select({ cardHolderId: crews.cardHolderId })
     .from(crews)
-    .where(eq(crews.id, crewId))
-    .get();
+    .innerJoin(users, eq(users.id, crews.cardHolderId))
+    .where(and(eq(crews.id, crewId), isNull(users.deletedAt)))
+    .all();
 
-  return crew ? [crew.cardHolderId] : [];
+  return rows.map((r) => r.cardHolderId);
 }
 
 function getCrewMemberIds(crewId: string, excludeUserId: string): string[] {
   return db
     .select({ userId: crewMembers.userId })
     .from(crewMembers)
+    .innerJoin(users, eq(users.id, crewMembers.userId))
     .where(
       and(
         eq(crewMembers.crewId, crewId),
         ne(crewMembers.userId, excludeUserId),
-        ne(crewMembers.role, "card_holder")
+        ne(crewMembers.role, "card_holder"),
+        isNull(users.deletedAt)
       )
     )
     .all()
@@ -159,7 +209,8 @@ async function processEmailForUser(
   crewId: string,
   eventType: NotificationEventType,
   template: { title: string; body: string },
-  data: EventData
+  storedData: EventData,
+  actorName: string
 ): Promise<void> {
   const channels = resolveChannels(userId, crewId, eventType);
   if (!channels.includes("email")) return;
@@ -172,13 +223,14 @@ async function processEmailForUser(
 
   if (!user) return;
 
+  // The sent email carries the live name; the logged copy keeps the placeholder
+  // so no name is frozen into `notification_log`.
   const result = await sendNotificationEmail(
     user.email,
-    template.title,
-    template.body
+    renderActorText(template.title, actorName),
+    renderActorText(template.body, actorName)
   );
 
-  // Log the email notification
   insertNotificationBatch([
     {
       userId,
@@ -187,7 +239,7 @@ async function processEmailForUser(
       channel: "email",
       title: template.title,
       body: template.body,
-      data,
+      data: storedData,
       status: result.success ? "sent" : "failed",
       sentAt: result.success ? new Date() : undefined,
       failedAt: result.success ? undefined : new Date(),

@@ -26,6 +26,11 @@ export const users = sqliteTable("users", {
   hasSeenTour: integer("has_seen_tour", { mode: "boolean" })
     .notNull()
     .default(false),
+  // Set when the person closes their account. The row is kept (anonymize, do
+  // not cascade) so shared crew/activity history survives, but this timestamp
+  // marks the account as closed so routing never targets a dead account and
+  // read surfaces can tell a live member from a former one.
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
