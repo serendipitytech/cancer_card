@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { tasks, crewMembers, users, bids } from "@/db/schema";
 import { createTaskSchema } from "@/lib/validators";
-import { eq, and, desc, inArray, sql, count } from "drizzle-orm";
+import { eq, and, desc, inArray, count } from "drizzle-orm";
 import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { getUserActiveCrew } from "@/lib/session";
@@ -52,6 +52,28 @@ export async function POST(request: Request) {
         { error: parsed.error.issues[0].message },
         { status: 400 }
       );
+    }
+
+    // Never trust a client-supplied assignee: an assigned member must belong to
+    // the creator's active crew.
+    if (parsed.data.assignedTo) {
+      const assigneeMembership = db
+        .select({ role: crewMembers.role })
+        .from(crewMembers)
+        .where(
+          and(
+            eq(crewMembers.crewId, crew.crewId),
+            eq(crewMembers.userId, parsed.data.assignedTo)
+          )
+        )
+        .get();
+
+      if (!assigneeMembership) {
+        return NextResponse.json(
+          { error: "That person is not in this crew" },
+          { status: 400 }
+        );
+      }
     }
 
     const auctionSettings = parsed.data.requestMode === "auction" && parsed.data.auctionSettings

@@ -61,6 +61,27 @@ export async function POST(
       );
     }
 
+    // Membership check up front: a non-member must not be able to reach the
+    // expired-auction auto-close path below, let alone place a bid. Never trust
+    // a client-supplied crew id — derive it from the task row.
+    const membership = db
+      .select()
+      .from(crewMembers)
+      .where(
+        and(
+          eq(crewMembers.crewId, task.crewId),
+          eq(crewMembers.userId, session.user.id)
+        )
+      )
+      .get();
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: "You're not a member of this crew" },
+        { status: 403 }
+      );
+    }
+
     const settings = task.auctionSettings as AuctionSettings;
     if (settings?.endsAt && new Date(settings.endsAt) < new Date()) {
       // Auction has expired - auto-close it by awarding to lowest bidder
@@ -103,18 +124,7 @@ export async function POST(
       );
     }
 
-    const membership = db
-      .select()
-      .from(crewMembers)
-      .where(
-        and(
-          eq(crewMembers.crewId, task.crewId),
-          eq(crewMembers.userId, session.user.id)
-        )
-      )
-      .get();
-
-    if (!membership || membership.role === "card_holder") {
+    if (membership.role === "card_holder") {
       return NextResponse.json(
         { error: "Card Holders can't bid on their own tasks" },
         { status: 403 }
