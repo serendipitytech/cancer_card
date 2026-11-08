@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { crews, crewMembers } from "@/db/schema";
 import { createCrewSchema } from "@/lib/validators";
 import { generateInviteCode } from "@/lib/utils";
+import { canManageCrew } from "@/lib/roles";
 import { seedCrewDefaults } from "@/db/seed";
 import { eq } from "drizzle-orm";
 import { setActiveCrewCookie, getActiveCrewCookie } from "@/lib/cookies";
@@ -126,7 +127,7 @@ export async function GET() {
         cardHolderId: m.crew.cardHolderId,
         createdAt: m.crew.createdAt,
         role: m.role,
-        ...(m.role === "card_holder" || m.role === "admin"
+        ...(canManageCrew(m.role)
           ? { inviteCode: m.crew.inviteCode }
           : {}),
       })),

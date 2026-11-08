@@ -15,14 +15,14 @@ export const users = sqliteTable("users", {
     .$defaultFn(() => crypto.randomUUID()),
   displayName: text("display_name").notNull(),
   email: text("email").notNull().unique(),
-  // Nullable through the Logto cutover: Logto owns credentials now, so new
-  // users have no local password. Dropped in a follow-up migration once no
-  // code reads it. See LOGTO-MIGRATION-PLAN.md.
-  passwordHash: text("password_hash"),
   // Logto user id (OIDC `sub`), populated on first authenticated login.
   // Nullable during transition; the 9 existing users link by verified email.
   logtoId: text("logto_id").unique(),
   avatarUrl: text("avatar_url"),
+  // IANA timezone (e.g. "America/New_York"). Day/hour boundaries for streaks,
+  // the self-care farm guard, and quiet hours are computed in the user's local
+  // time, not server UTC. Null falls back to the app default (see lib/time.ts).
+  timezone: text("timezone"),
   hasSeenTour: integer("has_seen_tour", { mode: "boolean" })
     .notNull()
     .default(false),
@@ -62,16 +62,17 @@ export const crews = sqliteTable("crews", {
   inviteBoundEmail: text("invite_bound_email"),
   settings: text("settings", { mode: "json" }).$type<CrewSettings>().default({
     defaultPoints: 500,
-    allowNegativeBalance: true,
   }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
 });
 
+// Negative balances are allowed by design (the card holder is never blocked
+// from asking), so there is no allow-negative toggle to read. The old
+// `allowNegativeBalance` flag was never consulted anywhere and was removed.
 export type CrewSettings = {
   defaultPoints: number;
-  allowNegativeBalance: boolean;
 };
 
 // ─── Crew Members ────────────────────────────────────────────────────────────
@@ -142,7 +143,7 @@ export const tasks = sqliteTable("tasks", {
   assignedTo: text("assigned_to").references(() => users.id),
   claimedBy: text("claimed_by").references(() => users.id),
   status: text("status", {
-    enum: ["pending", "claimed", "in_progress", "completed", "cancelled"],
+    enum: ["pending", "claimed", "completed", "cancelled"],
   })
     .notNull()
     .default("pending"),

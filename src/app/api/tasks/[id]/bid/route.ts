@@ -6,6 +6,9 @@ import { eq, and, sql } from "drizzle-orm";
 import { placeBidSchema, uuidParamSchema } from "@/lib/validators";
 import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
+import { isCardHolder } from "@/lib/roles";
+import { recordAuctionWin, awardEligibleBadges } from "@/lib/member-stats";
+import { emitBadgeNotifications } from "@/lib/badges";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 type AuctionSettings = {
@@ -114,7 +117,7 @@ export async function POST(
       )
       .get();
 
-    if (!membership || membership.role === "card_holder") {
+    if (!membership || isCardHolder(membership.role)) {
       return NextResponse.json(
         { error: "Card Holders can't bid on their own tasks" },
         { status: 403 }
@@ -179,6 +182,7 @@ export async function POST(
       let auctionClosed = false;
       let winnerUserId: string | null = null;
       let winnerBidAmount: number | null = null;
+      let awardedBadges: string[] = [];
 
       if (autoClose && totalBids >= autoClose) {
         const winningBid = tx
@@ -205,11 +209,13 @@ export async function POST(
             auctionClosed = true;
             winnerUserId = winningBid.userId;
             winnerBidAmount = winningBid.bidAmount;
+            recordAuctionWin(tx, task.crewId, winningBid.userId);
+            awardedBadges = awardEligibleBadges(tx, task.crewId, winningBid.userId);
           }
         }
       }
 
-      return { bid, auctionClosed, winnerUserId, winnerBidAmount };
+      return { bid, auctionClosed, winnerUserId, winnerBidAmount, awardedBadges };
     });
 
     logActivity(task.crewId, "bid_placed", session.user.id, {
@@ -240,6 +246,13 @@ export async function POST(
         winnerId: bidResult.winnerUserId,
         actorName: session.user.name || "Someone",
       });
+
+      emitBadgeNotifications(
+        task.crewId,
+        bidResult.winnerUserId,
+        bidResult.awardedBadges,
+        session.user.name || "Someone"
+      );
     }
 
     return NextResponse.json(bidResult.bid, { status: 201 });

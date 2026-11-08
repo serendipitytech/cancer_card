@@ -43,6 +43,13 @@
       "when": 1794097896326,
       "tag": "0005_wp4_invite_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794098200000,
+      "tag": "0006_wp5_gameplay",
+      "breakpoints": true
     }
   ]
 }

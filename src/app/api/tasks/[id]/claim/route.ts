@@ -7,6 +7,7 @@ import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { uuidParamSchema } from "@/lib/validators";
+import { isCardHolder } from "@/lib/roles";
 
 export async function POST(
   request: Request,
@@ -71,7 +72,7 @@ export async function POST(
         return { error: "You're not a member of this crew", status: 403 } as const;
       }
 
-      if (membership.role === "card_holder") {
+      if (isCardHolder(membership.role)) {
         return { error: "Card Holders cannot claim their own tasks", status: 403 } as const;
       }
 

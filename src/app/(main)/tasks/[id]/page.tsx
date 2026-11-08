@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/toast";
 import { useHaptics } from "@/hooks/use-haptics";
 import { useSSE } from "@/hooks/use-sse";
 import { timeAgo, getUrgencyLabel } from "@/lib/utils";
+import { canManageCrew } from "@/lib/roles";
 
 type TaskDetail = {
   id: string;
@@ -98,7 +99,7 @@ export default function TaskDetailPage() {
           setCurrentUserId(data.userId);
         }
         const activeCrew = data.crews?.find((c: any) => c.id === data.activeCrewId);
-        if (activeCrew?.role === "card_holder" || activeCrew?.role === "admin") {
+        if (canManageCrew(activeCrew?.role)) {
           setIsCardHolder(true);
           // Fetch crew members for assign dropdown
           fetch("/api/leaderboard")
@@ -162,25 +163,6 @@ export default function TaskDetailPage() {
       fetchTask();
     } catch (error) {
       addToast("error", error instanceof Error ? error.message : "Failed to claim");
-    }
-    setSubmitting(false);
-  }
-
-  async function handleComplete() {
-    setSubmitting(true);
-    vibrate("medium");
-
-    try {
-      const res = await fetch(`/api/tasks/${id}/complete`, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
-      vibrate("success");
-      addToast("success", "Task complete! Points deducted.");
-      fetchTask();
-    } catch (error) {
-      addToast("error", error instanceof Error ? error.message : "Failed to complete");
     }
     setSubmitting(false);
   }
@@ -557,8 +539,8 @@ export default function TaskDetailPage() {
             </div>
           )}
 
-          {/* CH: claimed / in_progress */}
-          {isCardHolder && (task.status === "claimed" || task.status === "in_progress") && (
+          {/* CH: claimed */}
+          {isCardHolder && task.status === "claimed" && (
             <div className="space-y-2">
               <Button
                 variant="success"
@@ -620,7 +602,7 @@ export default function TaskDetailPage() {
           )}
 
           {/* CM: claimed by ME → status message */}
-          {!isCardHolder && (task.status === "claimed" || task.status === "in_progress") && task.claimedBy === currentUserId && (
+          {!isCardHolder && task.status === "claimed" && task.claimedBy === currentUserId && (
             <Card padding="md">
               <p className="text-sm text-muted text-center">
                 You claimed this task. The Card Holder will mark it complete when you&apos;re done.

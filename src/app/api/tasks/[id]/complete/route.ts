@@ -6,6 +6,9 @@ import { eq, and, sql } from "drizzle-orm";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { uuidParamSchema } from "@/lib/validators";
+import { canManageCrew } from "@/lib/roles";
+import { recordCompletionStats, awardEligibleBadges } from "@/lib/member-stats";
+import { emitBadgeNotifications } from "@/lib/badges";
 
 export async function POST(
   request: Request,
@@ -61,7 +64,7 @@ export async function POST(
         return { error: "You're not a member of this crew", status: 403 } as const;
       }
 
-      if (membership.role !== "card_holder" && membership.role !== "admin") {
+      if (!canManageCrew(membership.role)) {
         return { error: "Only the Card Holder can mark tasks as completed", status: 403 } as const;
       }
 
@@ -87,22 +90,10 @@ export async function POST(
         .returning()
         .get();
 
+      let awardedBadges: string[] = [];
       if (task.claimedBy) {
-        tx.update(crewMembers)
-          .set({
-            stats: sql`json_set(
-              COALESCE(${crewMembers.stats}, '{}'),
-              '$.tasksCompleted', COALESCE(json_extract(${crewMembers.stats}, '$.tasksCompleted'), 0) + 1,
-              '$.pointsSpent', COALESCE(json_extract(${crewMembers.stats}, '$.pointsSpent'), 0) + ${finalCost}
-            )`,
-          })
-          .where(
-            and(
-              eq(crewMembers.crewId, task.crewId),
-              eq(crewMembers.userId, task.claimedBy)
-            )
-          )
-          .run();
+        recordCompletionStats(tx, task.crewId, task.claimedBy, finalCost);
+        awardedBadges = awardEligibleBadges(tx, task.crewId, task.claimedBy);
       }
 
       tx.insert(activityFeed)
@@ -119,7 +110,12 @@ export async function POST(
         })
         .run();
 
-      return { data: { updated, newBalance: updatedCrew.pointBalance }, crewId: task.crewId } as const;
+      return {
+        data: { updated, newBalance: updatedCrew.pointBalance },
+        crewId: task.crewId,
+        creditedUserId: task.claimedBy,
+        awardedBadges,
+      } as const;
     });
 
     if ("error" in result) {
@@ -132,6 +128,15 @@ export async function POST(
       pointCost: result.data.updated?.finalPointCost,
       actorName: session.user.name || "Someone",
     });
+
+    if (result.creditedUserId) {
+      emitBadgeNotifications(
+        result.crewId,
+        result.creditedUserId,
+        result.awardedBadges,
+        session.user.name || "Someone"
+      );
+    }
 
     return NextResponse.json({
       ...result.data.updated,

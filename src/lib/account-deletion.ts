@@ -57,7 +57,6 @@ export function anonymizeUserData(userId: string): AnonymizeResult {
         email: `deleted-${userId}@deleted.invalid`,
         avatarUrl: null,
         logtoId: null,
-        passwordHash: null,
         deletedAt: new Date(),
       })
       .where(eq(users.id, userId))

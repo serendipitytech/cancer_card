@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { milestones, selfCareRoutines, crews, activityFeed } from "@/db/schema";
+import { milestones, selfCareRoutines, crews, activityFeed, users } from "@/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { logMilestoneSchema } from "@/lib/validators";
-import { calculateMedicationStreak } from "@/lib/streaks";
+import {
+  calculateStreak,
+  alreadyLoggedToday,
+  STREAK_ACTION_TYPES,
+} from "@/lib/streaks";
+import { recordStreak, awardEligibleBadges } from "@/lib/member-stats";
+import { emitBadgeNotifications } from "@/lib/badges";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { getUserActiveCrew } from "@/lib/session";
+import { isCardHolder } from "@/lib/roles";
+import { resolveTimezone } from "@/lib/time";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
@@ -29,7 +37,7 @@ export async function POST(request: Request) {
     }
 
     const crew = await getUserActiveCrew(userId);
-    if (!crew || crew.role !== "card_holder") {
+    if (!crew || !isCardHolder(crew.role)) {
       return NextResponse.json(
         { error: "Only the Card Holder can log milestones" },
         { status: 403 }
@@ -43,6 +51,23 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: parsed.error.issues[0].message },
         { status: 400 }
+      );
+    }
+
+    const userRow = db
+      .select({ timezone: users.timezone })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
+    const tz = resolveTimezone(userRow?.timezone);
+
+    // Farm guard: the same self-care behavior can be logged at most once per
+    // local day, so neither the base points nor the streak bonus can be farmed
+    // by logging the same thing twice in a day.
+    if (alreadyLoggedToday(userId, crew.crewId, parsed.data.milestoneType, tz)) {
+      return NextResponse.json(
+        { error: "You've already logged this today. Come back tomorrow!" },
+        { status: 409 }
       );
     }
 
@@ -95,8 +120,14 @@ export async function POST(request: Request) {
         .run();
 
       let streakBonus = 0;
-      if (parsed.data.milestoneType === "meds") {
-        const streak = calculateMedicationStreak(userId, crew.crewId);
+      // Streak-driving action type(s) are product config, not a hardcoded
+      // "meds". Compute AFTER inserting this log so today counts, and in the
+      // user's local timezone so an evening log does not land on the next day.
+      if (STREAK_ACTION_TYPES.includes(parsed.data.milestoneType)) {
+        const streak = calculateStreak(userId, crew.crewId, tz);
+
+        recordStreak(tx, crew.crewId, userId, streak.currentStreak);
+
         if (streak.bonusPoints > 0) {
           streakBonus = streak.bonusPoints;
 
@@ -120,10 +151,13 @@ export async function POST(request: Request) {
         }
       }
 
+      const awardedBadges = awardEligibleBadges(tx, crew.crewId, userId);
+
       return {
         milestone,
         newBalance: updatedCrew.pointBalance + streakBonus,
         streakBonus,
+        awardedBadges,
       };
     });
 
@@ -133,6 +167,13 @@ export async function POST(request: Request) {
       routineName: routine?.name,
       actorName: session.user.name || "Someone",
     });
+
+    emitBadgeNotifications(
+      crew.crewId,
+      userId,
+      result.awardedBadges,
+      session.user.name || "Someone"
+    );
 
     return NextResponse.json({
       milestone: result.milestone,

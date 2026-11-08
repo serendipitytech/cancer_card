@@ -23,6 +23,7 @@ import { useTour } from "@/hooks/use-tour";
 import { usePullRefresh } from "@/hooks/use-pull-refresh";
 import { TourOverlay } from "@/components/tour/tour-overlay";
 import { timeAgo, getUrgencyLabel } from "@/lib/utils";
+import { canManageCrew } from "@/lib/roles";
 
 type DashboardProps = {
   userName: string;
@@ -76,7 +77,7 @@ export function DashboardClient({
     onRefresh: handleRefresh,
   });
 
-  const isCardHolder = role === "card_holder" || role === "admin";
+  const isCardHolder = canManageCrew(role);
 
   return (
     <div ref={pullRef} className="px-4 pt-6 space-y-5 max-w-lg mx-auto relative overflow-auto">

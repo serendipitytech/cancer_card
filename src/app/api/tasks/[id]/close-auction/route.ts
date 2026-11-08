@@ -7,6 +7,9 @@ import { z } from "zod";
 import { uuidParamSchema } from "@/lib/validators";
 import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
+import { canManageCrew } from "@/lib/roles";
+import { recordAuctionWin, awardEligibleBadges } from "@/lib/member-stats";
+import { emitBadgeNotifications } from "@/lib/badges";
 
 const closeAuctionSchema = z.object({
   action: z.enum(["auto", "select"]),
@@ -61,7 +64,7 @@ export async function POST(
       )
       .get();
 
-    if (!membership || (membership.role !== "card_holder" && membership.role !== "admin")) {
+    if (!membership || !canManageCrew(membership.role)) {
       return NextResponse.json(
         { error: "Only Card Holder or Admin can close auctions" },
         { status: 403 }
@@ -121,40 +124,70 @@ export async function POST(
       );
     }
 
-    // Update task status
-    const updatedTask = db
-      .update(tasks)
-      .set({
-        status: "claimed",
-        claimedBy: winningBid.userId,
-        finalPointCost: winningBid.bidAmount,
-      })
-      .where(eq(tasks.id, taskId))
-      .returning()
-      .get();
+    const winner = winningBid;
+
+    // Award the auction, record the win stat, and evaluate badges in one
+    // transaction. The guarded update (status still 'pending') means a second
+    // racing close cannot double-award. If it returns no row, someone already
+    // closed it.
+    const outcome = db.transaction((tx) => {
+      const updatedTask = tx
+        .update(tasks)
+        .set({
+          status: "claimed",
+          claimedBy: winner.userId,
+          finalPointCost: winner.bidAmount,
+        })
+        .where(and(eq(tasks.id, taskId), eq(tasks.status, "pending")))
+        .returning()
+        .get();
+
+      if (!updatedTask) {
+        return { closed: false as const };
+      }
+
+      recordAuctionWin(tx, task.crewId, winner.userId);
+      const awardedBadges = awardEligibleBadges(tx, task.crewId, winner.userId);
+
+      return { closed: true as const, updatedTask, awardedBadges };
+    });
+
+    if (!outcome.closed) {
+      return NextResponse.json(
+        { error: "This auction is no longer active" },
+        { status: 409 }
+      );
+    }
 
     // Log activity
-    logActivity(task.crewId, "auction_won", winningBid.userId, {
+    logActivity(task.crewId, "auction_won", winner.userId, {
       taskId: task.id,
       taskTitle: task.title,
-      winningBid: winningBid.bidAmount,
+      winningBid: winner.bidAmount,
       closedBy: session.user.id,
       closedManually: true,
     });
 
     // Notify winner
-    notifyOnEvent(task.crewId, "auction_won", winningBid.userId, {
+    notifyOnEvent(task.crewId, "auction_won", winner.userId, {
       taskId: task.id,
       taskTitle: task.title,
-      winningBid: winningBid.bidAmount,
-      winnerId: winningBid.userId,
+      winningBid: winner.bidAmount,
+      winnerId: winner.userId,
       actorName: session.user.name || "Card Holder",
     });
 
+    emitBadgeNotifications(
+      task.crewId,
+      winner.userId,
+      outcome.awardedBadges,
+      session.user.name || "Card Holder"
+    );
+
     return NextResponse.json({
       success: true,
-      task: updatedTask,
-      winningBid,
+      task: outcome.updatedTask,
+      winningBid: winner,
     });
   } catch (error) {
     console.error("Close auction error:", error);

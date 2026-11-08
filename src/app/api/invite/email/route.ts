@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getUserActiveCrew } from "@/lib/session";
 import { sendInviteEmailSchema } from "@/lib/validators";
 import { sendInviteEmail } from "@/lib/email";
+import { canManageCrew } from "@/lib/roles";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (crew.role !== "card_holder" && crew.role !== "admin") {
+    if (!canManageCrew(crew.role)) {
       return NextResponse.json(
         { error: "Only the Card Holder or an admin can send invites" },
         { status: 403 }

@@ -2,24 +2,9 @@ import { z } from "zod";
 
 export const uuidParamSchema = z.string().uuid("Invalid ID format");
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
-
-export const signupSchema = z.object({
-  displayName: z
-    .string()
-    .min(2, "Name must be at least 2 characters")
-    .max(50, "Name must be 50 characters or less"),
-  email: z.string().email("Please enter a valid email"),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(128, "Password must be 128 characters or less"),
-});
-
-export const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email"),
-  password: z.string().min(1, "Password is required"),
-});
+// Auth input schemas (signup/login) were removed with the Auth.js -> Logto
+// migration: Logto owns credential collection now, so the app validates no
+// passwords.
 
 // ─── Crew ────────────────────────────────────────────────────────────────────
 

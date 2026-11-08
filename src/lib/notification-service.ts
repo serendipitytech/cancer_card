@@ -12,6 +12,7 @@ import {
 } from "@/lib/notifications";
 import { ANONYMIZED_DISPLAY_NAME } from "@/lib/account-deletion";
 import { sendNotificationEmail } from "@/lib/notification-email";
+import { localHour, resolveTimezone } from "@/lib/time";
 
 type EventData = Record<string, unknown>;
 
@@ -261,16 +262,24 @@ function resolveChannels(
   // a brand-new event type would be silently suppressed for existing users.
   if (prefs.eventPreferences[eventType] === false) return [];
 
+  // Quiet hours are in the recipient's local time, not server UTC.
+  const userRow = db
+    .select({ timezone: users.timezone })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  const tz = resolveTimezone(userRow?.timezone);
+
   const channels: NotificationChannel[] = [];
 
   if (prefs.channels.in_app) channels.push("in_app");
 
   // Email/push respect quiet hours
-  if (prefs.channels.email && !isInQuietHours(prefs.quietHours)) {
+  if (prefs.channels.email && !isInQuietHours(prefs.quietHours, tz)) {
     channels.push("email");
   }
 
-  if (prefs.channels.push && !isInQuietHours(prefs.quietHours)) {
+  if (prefs.channels.push && !isInQuietHours(prefs.quietHours, tz)) {
     channels.push("push");
   }
 
@@ -279,14 +288,17 @@ function resolveChannels(
   return channels;
 }
 
-function isInQuietHours(quietHours: {
-  enabled: boolean;
-  start: number;
-  end: number;
-}): boolean {
+function isInQuietHours(
+  quietHours: {
+    enabled: boolean;
+    start: number;
+    end: number;
+  },
+  tz: string
+): boolean {
   if (!quietHours.enabled) return false;
 
-  const hour = new Date().getHours();
+  const hour = localHour(new Date(), tz);
   const { start, end } = quietHours;
 
   // Handle overnight ranges (e.g., 22-7)

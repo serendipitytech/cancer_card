@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { crewMembers, crews } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getActiveCrewCookie } from "@/lib/cookies";
 
 type CrewMembership = {
@@ -61,16 +61,4 @@ export async function getUserActiveCrew(
   userId: string
 ): Promise<CrewMembership | null> {
   return resolveActiveCrew(getUserCrews(userId));
-}
-
-export function isCardHolder(userId: string, crewId: string): boolean {
-  const member = db
-    .select({ role: crewMembers.role })
-    .from(crewMembers)
-    .where(
-      and(eq(crewMembers.crewId, crewId), eq(crewMembers.userId, userId))
-    )
-    .get();
-
-  return member?.role === "card_holder";
 }

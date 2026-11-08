@@ -11,12 +11,11 @@ type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
 const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   pending: "warning",
   claimed: "default",
-  in_progress: "default",
   completed: "success",
   cancelled: "muted",
 };
 
-const STATUSES = ["all", "pending", "claimed", "in_progress", "completed", "cancelled"] as const;
+const STATUSES = ["all", "pending", "claimed", "completed", "cancelled"] as const;
 
 const columns: Column<AdminTask>[] = [
   {

@@ -11,8 +11,8 @@ import { logtoConfig } from "@/lib/logto";
  *  - Already linked (logto_id matches): no-op.
  *  - A pre-Logto row exists for the VERIFIED email (the 9 migrated users):
  *    stamp its logto_id.
- *  - Otherwise: create a new app user row (password_hash stays null, Logto owns
- *    credentials now).
+ *  - Otherwise: create a new app user row (Logto owns credentials now; the app
+ *    stores no password).
  *
  * Security: ALL email-based provisioning, both linking to an existing row
  * and creating a new one, requires a verified email. An unverified email

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getUserActiveCrew } from "@/lib/session";
 import { updateInviteSchema } from "@/lib/validators";
+import { canManageCrew } from "@/lib/roles";
 import {
   revokeInvite,
   rotateInvite,
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (crew.role !== "card_holder" && crew.role !== "admin") {
+    if (!canManageCrew(crew.role)) {
       return NextResponse.json(
         { error: "Only the Card Holder or an admin can manage invites" },
         { status: 403 }

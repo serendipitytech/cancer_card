@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { tasks, crewMembers, users, bids } from "@/db/schema";
+import { tasks, users, bids } from "@/db/schema";
 import { createTaskSchema } from "@/lib/validators";
-import { eq, and, desc, inArray, sql, count } from "drizzle-orm";
+import { eq, and, desc, inArray, count } from "drizzle-orm";
 import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { getUserActiveCrew } from "@/lib/session";
+import { canManageCrew } from "@/lib/roles";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-const VALID_TASK_STATUSES = ["pending", "claimed", "in_progress", "completed", "cancelled"] as const;
+const VALID_TASK_STATUSES = ["pending", "claimed", "completed", "cancelled"] as const;
 
 export async function POST(request: Request) {
   try {
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (crew.role !== "card_holder" && crew.role !== "admin") {
+    if (!canManageCrew(crew.role)) {
       return NextResponse.json(
         { error: "Only the Card Holder or Admin can play cards" },
         { status: 403 }

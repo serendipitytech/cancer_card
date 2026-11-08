@@ -7,6 +7,7 @@ import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { uuidParamSchema } from "@/lib/validators";
+import { canManageCrew } from "@/lib/roles";
 import { z } from "zod";
 
 const assignSchema = z.object({
@@ -78,7 +79,7 @@ export async function POST(
         return { error: "You're not a member of this crew", status: 403 } as const;
       }
 
-      if (membership.role !== "card_holder" && membership.role !== "admin") {
+      if (!canManageCrew(membership.role)) {
         return { error: "Only the Card Holder can assign tasks", status: 403 } as const;
       }
 

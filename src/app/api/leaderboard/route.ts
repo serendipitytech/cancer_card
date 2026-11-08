@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { crewMembers, users } from "@/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getUserActiveCrew } from "@/lib/session";
+import { isCardHolder } from "@/lib/roles";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET() {
@@ -45,7 +46,7 @@ export async function GET() {
       .all();
 
     const ranked = members
-      .filter((m) => m.role !== "card_holder")
+      .filter((m) => !isCardHolder(m.role))
       .map((m) => {
         const stats = (m.stats || {}) as Record<string, number>;
         return {
@@ -67,7 +68,7 @@ export async function GET() {
       })
       .sort((a, b) => b.score - a.score);
 
-    const cardHolder = members.find((m) => m.role === "card_holder");
+    const cardHolder = members.find((m) => isCardHolder(m.role));
 
     return NextResponse.json({
       leaderboard: ranked,

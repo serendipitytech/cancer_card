@@ -1,17 +1,23 @@
 import type { MemberStats } from "@/types";
-import { db } from "@/db";
-import { crewMembers, users } from "@/db/schema";
-import { eq, and, sql } from "drizzle-orm";
 import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
 export { BADGE_DEFINITIONS, getBadgeDefinition } from "./badge-definitions";
 import { getBadgeDefinition } from "./badge-definitions";
 
+// Badge evaluation is a PURE function of the member's stats, their current
+// badges, and the crew size. Keeping it pure is what makes it testable and what
+// lets the award path run inside the same transaction as the stat write (see
+// member-stats.ts). The catalog it draws from (badge-definitions.ts) is the
+// product-supplied content; this function owns the generic threshold rules.
+//
+// Only the four stat-backed badges are evaluated here. The five context-only
+// badges (per-category counts, time-of-day, min-bid) that the old code defined
+// but never evaluated were dropped from the catalog for v1 rather than left
+// dangling and unearnable (see WP5 notes / engine spec section 6.3).
 export function evaluateBadges(
-  userId: string,
-  crewId: string,
   stats: MemberStats,
-  currentBadges: string[]
+  currentBadges: string[],
+  memberCount: number
 ): string[] {
   const newBadges: string[] = [];
 
@@ -27,57 +33,25 @@ export function evaluateBadges(
     newBadges.push("seven_day_streak");
   }
 
-  if (!currentBadges.includes("the_og")) {
-    const memberCount = db
-      .select({ count: sql<number>`count(*)` })
-      .from(crewMembers)
-      .where(eq(crewMembers.crewId, crewId))
-      .get();
-
-    const member = db
-      .select()
-      .from(crewMembers)
-      .where(
-        and(eq(crewMembers.crewId, crewId), eq(crewMembers.userId, userId))
-      )
-      .get();
-
-    if (memberCount && memberCount.count <= 5 && member) {
-      newBadges.push("the_og");
-    }
+  if (!currentBadges.includes("the_og") && memberCount <= 5) {
+    newBadges.push("the_og");
   }
 
   return newBadges;
 }
 
-export function awardBadges(userId: string, crewId: string, badgeIds: string[]) {
-  if (badgeIds.length === 0) return;
-
-  const member = db
-    .select()
-    .from(crewMembers)
-    .where(
-      and(eq(crewMembers.crewId, crewId), eq(crewMembers.userId, userId))
-    )
-    .get();
-
-  if (!member) return;
-
-  const existingBadges = (member.badges || []) as string[];
-  const updatedBadges = [...existingBadges, ...badgeIds];
-
-  db.update(crewMembers)
-    .set({ badges: updatedBadges })
-    .where(eq(crewMembers.id, member.id))
-    .run();
-
-  const user = db
-    .select({ displayName: users.displayName })
-    .from(users)
-    .where(eq(users.id, userId))
-    .get();
-  const actorName = user?.displayName || "Someone";
-
+/**
+ * Fire the activity-feed entry and notification for each newly awarded badge.
+ * This is the side-effecting half, split out from evaluation so it runs AFTER
+ * the DB transaction commits (notifications must never be inside a tx). The
+ * badge rows themselves are written transactionally by `awardEligibleBadges`.
+ */
+export function emitBadgeNotifications(
+  crewId: string,
+  userId: string,
+  badgeIds: string[],
+  actorName: string
+): void {
   for (const badgeId of badgeIds) {
     const badge = getBadgeDefinition(badgeId);
     logActivity(crewId, "badge_earned", userId, {

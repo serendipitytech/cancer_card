@@ -1,23 +1,20 @@
 import type { BadgeDefinition } from "@/types";
 
+// The Cancer Card badge catalog. Each entry here is reachable: the award engine
+// (badges.ts `evaluateBadges`) can actually grant it from stats the app writes.
+//
+// Five earlier definitions (Taco Champion, Midnight Hero, Ride or Die, The Floor
+// Is Clean, Penny Pincher) were cut for v1: they needed per-category completion
+// counts, time-of-day, or min-bid context that the app does not track, and the
+// old code never evaluated them, so they could never be earned. Per the engine
+// spec (section 6.3) a v1-out-of-scope badge is dropped from the catalog, not
+// left dangling. They return when the shared engine tracks those signals.
 export const BADGE_DEFINITIONS: BadgeDefinition[] = [
   {
     id: "first_responder",
     name: "First Responder",
-    description: "First to claim an open task 5 times",
+    description: "Completed 5 tasks",
     emoji: "🚨",
-  },
-  {
-    id: "taco_champion",
-    name: "Taco Champion",
-    description: "Delivered food 10+ times",
-    emoji: "🌮",
-  },
-  {
-    id: "midnight_hero",
-    name: "Midnight Hero",
-    description: "Completed a task between 10pm-6am",
-    emoji: "🦸",
   },
   {
     id: "auction_shark",
@@ -26,21 +23,9 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     emoji: "🦈",
   },
   {
-    id: "ride_or_die",
-    name: "Ride or Die",
-    description: "Completed 5+ transportation tasks",
-    emoji: "🚗",
-  },
-  {
-    id: "floor_is_clean",
-    name: "The Floor Is Clean",
-    description: "Completed 5+ household tasks",
-    emoji: "✨",
-  },
-  {
     id: "seven_day_streak",
     name: "7-Day Streak",
-    description: "Helped every day for a week",
+    description: "Kept a 7-day self-care streak",
     emoji: "🔥",
   },
   {
@@ -48,12 +33,6 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     name: "The OG",
     description: "One of the first 5 crew members to join",
     emoji: "👑",
-  },
-  {
-    id: "penny_pincher",
-    name: "Penny Pincher",
-    description: "Won an auction at minimum bid",
-    emoji: "💰",
   },
 ];
 

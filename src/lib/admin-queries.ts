@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db } from "@/db";
-import { users, crews, tasks, milestones, activityFeed } from "@/db/schema";
+import { users, crews } from "@/db/schema";
 import { sql, desc, and, type SQL } from "drizzle-orm";
 import { requireAdmin } from "@/lib/require-admin";
 
@@ -46,7 +46,7 @@ export async function getOverviewStats(): Promise<OverviewStats> {
     SELECT
       (SELECT COUNT(*) FROM users) AS totalUsers,
       (SELECT COUNT(*) FROM crews) AS totalCrews,
-      (SELECT COUNT(*) FROM tasks WHERE status IN ('pending', 'claimed', 'in_progress')) AS activeTasks,
+      (SELECT COUNT(*) FROM tasks WHERE status IN ('pending', 'claimed')) AS activeTasks,
       (SELECT COUNT(*) FROM tasks WHERE status = 'completed') AS completedTasks,
       (SELECT COUNT(*) FROM milestones) AS totalMilestones,
       (SELECT COUNT(*) FROM activity_feed) AS totalActivity,
