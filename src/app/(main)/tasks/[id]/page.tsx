@@ -65,10 +65,9 @@ export default function TaskDetailPage() {
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   function fetchTask() {
-    fetch(`/api/tasks?status=`)
-      .then((r) => r.json())
-      .then((data) => {
-        const found = data.tasks?.find((t: TaskDetail) => t.id === id);
+    fetch(`/api/tasks/${id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((found: TaskDetail | null) => {
         if (found) {
           setTask(found);
           // Calculate time remaining for auction
@@ -162,25 +161,6 @@ export default function TaskDetailPage() {
       fetchTask();
     } catch (error) {
       addToast("error", error instanceof Error ? error.message : "Failed to claim");
-    }
-    setSubmitting(false);
-  }
-
-  async function handleComplete() {
-    setSubmitting(true);
-    vibrate("medium");
-
-    try {
-      const res = await fetch(`/api/tasks/${id}/complete`, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
-      vibrate("success");
-      addToast("success", "Task complete! Points deducted.");
-      fetchTask();
-    } catch (error) {
-      addToast("error", error instanceof Error ? error.message : "Failed to complete");
     }
     setSubmitting(false);
   }
@@ -397,7 +377,7 @@ export default function TaskDetailPage() {
             {getUrgencyLabel(task.urgency)}
           </Badge>
           <Badge variant="muted">{task.category}</Badge>
-          {task.requestMode === "direct_assign" && (
+          {task.requestMode === "direct" && (
             <Badge variant="default">Direct</Badge>
           )}
           {task.requestMode === "auction" && (
@@ -597,8 +577,8 @@ export default function TaskDetailPage() {
             </Button>
           )}
 
-          {/* CM: pending + direct_assign + assigned to ME → claim */}
-          {!isCardHolder && task.status === "pending" && task.requestMode === "direct_assign" && task.assignedTo === currentUserId && (
+          {/* CM: pending + direct + assigned to ME → claim */}
+          {!isCardHolder && task.status === "pending" && task.requestMode === "direct" && task.assignedTo === currentUserId && (
             <Button
               className="w-full"
               size="lg"
@@ -610,8 +590,8 @@ export default function TaskDetailPage() {
             </Button>
           )}
 
-          {/* CM: pending + direct_assign + assigned to someone else → info */}
-          {!isCardHolder && task.status === "pending" && task.requestMode === "direct_assign" && task.assignedTo && task.assignedTo !== currentUserId && (
+          {/* CM: pending + direct + assigned to someone else → info */}
+          {!isCardHolder && task.status === "pending" && task.requestMode === "direct" && task.assignedTo && task.assignedTo !== currentUserId && (
             <Card padding="md">
               <p className="text-sm text-muted text-center">
                 This task was assigned to someone else.

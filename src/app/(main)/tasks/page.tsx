@@ -150,7 +150,7 @@ export default function TasksPage() {
                       </Badge>
                     )}
 
-                    {task.requestMode === "direct_assign" && (
+                    {task.requestMode === "direct" && (
                       <Badge variant="default">Direct</Badge>
                     )}
 

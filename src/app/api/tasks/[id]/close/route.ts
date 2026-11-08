@@ -82,6 +82,25 @@ export async function POST(
         return { error: "Only the Card Holder can close tasks", status: 403 } as const;
       }
 
+      // Never trust a client-supplied creditUserId: the credited member must
+      // belong to the task's crew.
+      if (creditUserId) {
+        const creditMembership = tx
+          .select({ id: crewMembers.id })
+          .from(crewMembers)
+          .where(
+            and(
+              eq(crewMembers.crewId, task.crewId),
+              eq(crewMembers.userId, creditUserId)
+            )
+          )
+          .get();
+
+        if (!creditMembership) {
+          return { error: "That person is not in this crew", status: 400 } as const;
+        }
+      }
+
       if (action === "complete") {
         const finalCost = task.finalPointCost || task.pointCost;
 

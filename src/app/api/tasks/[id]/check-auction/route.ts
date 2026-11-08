@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { tasks, bids } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { tasks, crewMembers } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 import { uuidParamSchema } from "@/lib/validators";
-import { logActivity } from "@/lib/points";
-import { notifyOnEvent } from "@/lib/notification-service";
 
 type AuctionSettings = {
   endsAt?: string;
@@ -13,6 +11,8 @@ type AuctionSettings = {
   autoCloseAfterBids?: number | null;
 } | null;
 
+// Read-only: reports auction status without mutating state. Closing an auction
+// (awarding a winner, deducting points) must go through the write endpoints.
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -35,6 +35,25 @@ export async function GET(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    // Membership check: only crew members may inspect a crew's auction.
+    const membership = db
+      .select({ role: crewMembers.role })
+      .from(crewMembers)
+      .where(
+        and(
+          eq(crewMembers.crewId, task.crewId),
+          eq(crewMembers.userId, session.user.id)
+        )
+      )
+      .get();
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: "You're not a member of this crew" },
+        { status: 403 }
+      );
+    }
+
     if (task.requestMode !== "auction") {
       return NextResponse.json(
         { error: "This task is not an auction" },
@@ -45,58 +64,11 @@ export async function GET(
     const settings = task.auctionSettings as AuctionSettings;
     const now = new Date();
     const endsAt = settings?.endsAt ? new Date(settings.endsAt) : null;
-    const isExpired = endsAt && endsAt < now;
-
-    // If expired and still pending, auto-close it
-    if (isExpired && task.status === "pending") {
-      const lowestBid = db
-        .select()
-        .from(bids)
-        .where(eq(bids.taskId, taskId))
-        .orderBy(bids.bidAmount)
-        .limit(1)
-        .get();
-
-      if (lowestBid) {
-        db.update(tasks)
-          .set({
-            status: "claimed",
-            claimedBy: lowestBid.userId,
-            finalPointCost: lowestBid.bidAmount,
-          })
-          .where(eq(tasks.id, taskId))
-          .run();
-
-        logActivity(task.crewId, "auction_won", lowestBid.userId, {
-          taskId: task.id,
-          taskTitle: task.title,
-          winningBid: lowestBid.bidAmount,
-          autoClosedOnExpiry: true,
-        });
-
-        notifyOnEvent(task.crewId, "auction_won", lowestBid.userId, {
-          taskId: task.id,
-          taskTitle: task.title,
-          winningBid: lowestBid.bidAmount,
-          winnerId: lowestBid.userId,
-          actorName: "System",
-        });
-
-        return NextResponse.json({
-          status: "closed",
-          expired: true,
-          endsAt: endsAt?.toISOString(),
-          winner: {
-            userId: lowestBid.userId,
-            bidAmount: lowestBid.bidAmount,
-          },
-        });
-      }
-    }
+    const isExpired = endsAt ? endsAt < now : false;
 
     return NextResponse.json({
       status: task.status === "pending" ? (isExpired ? "expired" : "active") : task.status,
-      expired: isExpired || false,
+      expired: isExpired,
       endsAt: endsAt?.toISOString() || null,
       timeRemaining: endsAt && !isExpired ? Math.max(0, endsAt.getTime() - now.getTime()) : 0,
     });
