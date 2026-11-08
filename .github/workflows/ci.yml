@@ -1,0 +1,58 @@
+name: CI
+
+# Quality gates for The Cancer Card. Runs the same three checks as the local
+# pre-commit hook (.githooks/pre-commit) on every push and pull request:
+#   1. tsc --noEmit   TypeScript type-check
+#   2. eslint         lint
+#   3. vitest run     test suite
+#
+# Node 20 is required. The project's packages declare engines "20 || >=22", so
+# the runner must be on 20+ even though some local dev boxes are still on 18.
+#
+# Secrets: these gates need none. If a future step needs one, reference it as
+# ${{ secrets.NAME }} by name only. Never inline a secret value in this file.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Type-check, lint, and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      # Lint is a real gate and WILL fail the job while the pre-existing errors
+      # and warnings owned by WP1/WP3/WP5/WP6 remain. That failure is intentional
+      # and visible, not swallowed: there is deliberately no continue-on-error
+      # here. This step turns green once those code WPs land their file-scoped
+      # lint fixes. WP7 does not bulk-fix lint, so as not to collide with them.
+      - name: Lint (eslint)
+        # Still run even if the type-check step failed, so every gate reports.
+        if: ${{ !cancelled() }}
+        run: npx eslint .
+
+      - name: Test (vitest run)
+        # Still run even if an earlier gate failed, so every gate reports.
+        if: ${{ !cancelled() }}
+        run: npx vitest run
