@@ -1,0 +1,35 @@
+#!/usr/bin/env sh
+# Pre-commit gate for The Cancer Card.
+#
+# Runs the same three checks as CI (.github/workflows/ci.yml) so problems are
+# caught before they are pushed:
+#   1. tsc --noEmit   TypeScript type-check
+#   2. eslint         lint
+#   3. vitest run     test suite
+#
+# Enable it once per clone:
+#   git config core.hooksPath .githooks
+# or run: sh .githooks/install.sh
+#
+# Node 20+ is required, matching CI (packages declare engines "20 || >=22").
+#
+# To bypass in a genuine emergency: git commit --no-verify (use sparingly).
+#
+# Note: eslint currently reports pre-existing errors/warnings in files owned by
+# WP1/WP3/WP5/WP6. Until those WPs land their file-scoped lint fixes, this hook
+# will block commits on the lint step. That is the same honest failure CI shows.
+
+set -e
+
+echo "pre-commit: running tsc, eslint, vitest ..."
+
+echo "pre-commit [1/3]: tsc --noEmit"
+npx tsc --noEmit
+
+echo "pre-commit [2/3]: eslint"
+npx eslint .
+
+echo "pre-commit [3/3]: vitest run"
+npx vitest run
+
+echo "pre-commit: all gates passed."
