@@ -48,6 +48,18 @@ export const crews = sqliteTable("crews", {
     .references(() => users.id),
   pointBalance: integer("point_balance").notNull().default(500),
   inviteCode: text("invite_code").notNull().unique(),
+  // ─── Invite lifecycle (WP4) ──────────────────────────────────────────────
+  // The invite code was a permanent, unrevocable bearer token. These columns
+  // make the one-code-per-crew model a managed lifecycle object: it can expire,
+  // cap its uses, be revoked outright, and optionally be bound to one email.
+  // Null expiry/maxUses/boundEmail = unrestricted (the legacy default); null
+  // revokedAt = active. useCount is the running redemption count. WP3's
+  // deletion-time rotation resets all of these to a clean active state.
+  inviteExpiresAt: integer("invite_expires_at", { mode: "timestamp" }),
+  inviteMaxUses: integer("invite_max_uses"),
+  inviteUseCount: integer("invite_use_count").notNull().default(0),
+  inviteRevokedAt: integer("invite_revoked_at", { mode: "timestamp" }),
+  inviteBoundEmail: text("invite_bound_email"),
   settings: text("settings", { mode: "json" }).$type<CrewSettings>().default({
     defaultPoints: 500,
     allowNegativeBalance: true,

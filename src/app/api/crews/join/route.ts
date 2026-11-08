@@ -1,13 +1,43 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/db";
-import { crews, crewMembers } from "@/db/schema";
 import { joinCrewSchema } from "@/lib/validators";
-import { eq, and } from "drizzle-orm";
+import { redeemInvite, type InviteRejection } from "@/lib/invite";
 import { logActivity } from "@/lib/points";
 import { notifyOnEvent } from "@/lib/notification-service";
 import { setActiveCrewCookie } from "@/lib/cookies";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+// Maps a redemption rejection to an HTTP status + user-facing message. Kept out
+// of the lib so the lib stays transport-agnostic and testable.
+const REJECTIONS: Record<
+  InviteRejection,
+  { status: number; error: string }
+> = {
+  not_found: {
+    status: 404,
+    error: "Invalid invite code. Double-check and try again!",
+  },
+  revoked: {
+    status: 410,
+    error: "This invite has been turned off. Ask for a new one.",
+  },
+  expired: {
+    status: 410,
+    error: "This invite has expired. Ask for a new one.",
+  },
+  exhausted: {
+    status: 410,
+    error: "This invite has reached its limit. Ask for a new one.",
+  },
+  email_mismatch: {
+    status: 403,
+    error: "This invite is for a different email address.",
+  },
+  already_member: {
+    status: 409,
+    error: "You're already a member of this crew!",
+  },
+};
 
 export async function POST(request: Request) {
   try {
@@ -37,44 +67,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const crew = db
-      .select()
-      .from(crews)
-      .where(eq(crews.inviteCode, parsed.data.inviteCode.toUpperCase()))
-      .get();
+    const result = redeemInvite({
+      code: parsed.data.inviteCode,
+      userId: session.user.id,
+      userEmail: session.user.email,
+    });
 
-    if (!crew) {
-      return NextResponse.json(
-        { error: "Invalid invite code. Double-check and try again!" },
-        { status: 404 }
-      );
+    if (!result.ok) {
+      const { status, error } = REJECTIONS[result.reason];
+      return NextResponse.json({ error }, { status });
     }
 
-    const alreadyInThisCrew = db
-      .select({ id: crewMembers.id })
-      .from(crewMembers)
-      .where(
-        and(
-          eq(crewMembers.crewId, crew.id),
-          eq(crewMembers.userId, session.user.id)
-        )
-      )
-      .get();
-
-    if (alreadyInThisCrew) {
-      return NextResponse.json(
-        { error: "You're already a member of this crew!" },
-        { status: 409 }
-      );
-    }
-
-    db.insert(crewMembers)
-      .values({
-        crewId: crew.id,
-        userId: session.user.id,
-        role: "crew_member",
-      })
-      .run();
+    const { crew } = result;
 
     logActivity(crew.id, "member_joined", session.user.id, {
       crewName: crew.name,

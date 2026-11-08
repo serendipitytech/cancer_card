@@ -9,6 +9,7 @@ import {
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { generateInviteCode } from "@/lib/utils";
+import { FRESH_INVITE_LIFECYCLE } from "@/lib/invite";
 
 /**
  * Account deletion = anonymize, not cascade (Troy's decision). We keep the
@@ -63,11 +64,17 @@ export function anonymizeUserData(userId: string): AnonymizeResult {
       .run();
 
     // 2. Crews the user card-held: a crew name often embeds the patient's name
-    // ("Jane's chemo crew"), and the invite code is a permanent bearer token.
-    // Neutralize the name and rotate the code so it stops granting access.
+    // ("Jane's chemo crew"), and the invite code is a bearer token. Neutralize
+    // the name and rotate the code so it stops granting access. Reset the WP4
+    // invite lifecycle to a clean active state so the fresh code is not left
+    // carrying a stale revoked/expired/bound flag from before deletion.
     for (const crew of cardHeldCrews) {
       tx.update(crews)
-        .set({ name: ANONYMIZED_CREW_NAME, inviteCode: generateInviteCode() })
+        .set({
+          name: ANONYMIZED_CREW_NAME,
+          inviteCode: generateInviteCode(),
+          ...FRESH_INVITE_LIFECYCLE,
+        })
         .where(eq(crews.id, crew.id))
         .run();
     }

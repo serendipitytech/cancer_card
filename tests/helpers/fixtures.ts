@@ -33,16 +33,39 @@ export type SeededCrew = { id: string; cardHolderId: string; inviteCode: string 
 
 export function createCrew(
   cardHolderId: string,
-  overrides: Partial<{ name: string; inviteCode: string }> = {}
+  overrides: Partial<{
+    name: string;
+    inviteCode: string;
+    inviteExpiresAt: Date | null;
+    inviteMaxUses: number | null;
+    inviteUseCount: number;
+    inviteRevokedAt: Date | null;
+    inviteBoundEmail: string | null;
+  }> = {}
 ): SeededCrew {
   const inviteCode =
-    overrides.inviteCode ?? uniq("inv").slice(0, 8).padEnd(8, "0");
+    overrides.inviteCode ?? uniq("inv").slice(0, 8).padEnd(8, "0").toUpperCase();
   const crew = db
     .insert(crews)
     .values({
       name: overrides.name ?? uniq("Crew"),
       cardHolderId,
       inviteCode,
+      ...(overrides.inviteExpiresAt !== undefined
+        ? { inviteExpiresAt: overrides.inviteExpiresAt }
+        : {}),
+      ...(overrides.inviteMaxUses !== undefined
+        ? { inviteMaxUses: overrides.inviteMaxUses }
+        : {}),
+      ...(overrides.inviteUseCount !== undefined
+        ? { inviteUseCount: overrides.inviteUseCount }
+        : {}),
+      ...(overrides.inviteRevokedAt !== undefined
+        ? { inviteRevokedAt: overrides.inviteRevokedAt }
+        : {}),
+      ...(overrides.inviteBoundEmail !== undefined
+        ? { inviteBoundEmail: overrides.inviteBoundEmail }
+        : {}),
     })
     .returning()
     .get();

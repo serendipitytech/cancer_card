@@ -98,3 +98,38 @@ export const sendInviteEmailSchema = z.object({
     .min(1, "At least one email is required")
     .max(5, "You can send to at most 5 people at once"),
 });
+
+// Configure the crew's invite lifecycle. Every field is optional so a caller
+// can change one facet at a time; `null` clears a restriction. `rotate` mints a
+// fresh code (and resets all restrictions); `revoke` turns the current code off.
+export const updateInviteSchema = z
+  .object({
+    expiresAt: z
+      .string()
+      .datetime("Expiry must be an ISO date-time")
+      .nullable()
+      .optional(),
+    maxUses: z
+      .number()
+      .int("Max uses must be a whole number")
+      .min(1, "Max uses must be at least 1")
+      .max(10000, "Max uses cannot exceed 10,000")
+      .nullable()
+      .optional(),
+    boundEmail: z
+      .string()
+      .email("Please enter a valid email address")
+      .nullable()
+      .optional(),
+    revoke: z.boolean().optional(),
+    rotate: z.boolean().optional(),
+  })
+  .refine(
+    (v) =>
+      v.expiresAt !== undefined ||
+      v.maxUses !== undefined ||
+      v.boundEmail !== undefined ||
+      v.revoke === true ||
+      v.rotate === true,
+    "No invite changes requested"
+  );
