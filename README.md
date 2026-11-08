@@ -181,6 +181,26 @@ npm run db:seed     # Seed default data
 npm run dev         # Start on http://localhost:3000
 ```
 
+## Testing
+
+Vitest drives the unit and API-route suite. Tests run against a throwaway
+in-memory SQLite database (one per test file) that is built from the live Drizzle
+schema and wiped between tests, and they invoke the Next.js route handlers
+directly with a faked authenticated session. No server, no network, no real DB.
+
+```bash
+npm test          # run the suite once (vitest run)
+npm run test:watch  # watch mode
+
+# A single file:
+npx vitest run tests/routes/task-close.test.ts
+```
+
+See `tests/README.md` for the harness design (DB setup, the auth/session mock,
+and fixtures). Coverage currently targets the high-blast-radius paths: point
+spend/earn math, task completion (the money path), reverse-auction close, bidding,
+self-care/streak math, and crew membership/role authorization.
+
 ## Project Documentation
 
 | File | Description |
@@ -189,3 +209,4 @@ npm run dev         # Start on http://localhost:3000
 | `PLAN.md` | Original implementation plan |
 | `RECAP.md` | Full build recap (tech stack, file structure, gotchas) |
 | `ROADMAP.md` | Feature roadmap with phases and priorities |
+| `tests/README.md` | Test harness design and how to run the suite |
